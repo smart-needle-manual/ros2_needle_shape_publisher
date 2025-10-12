@@ -1,3 +1,11 @@
+#Original Author: Dimitri Lezcano
+
+#Updating Author: Rajdeep Banerjee
+
+#Change
+import argparse
+#End Change
+
 import numpy as np
 # ROS2 packages
 import rclpy
@@ -39,9 +47,17 @@ class ShapeSensingNeedleNode( NeedleNode ):
     #                            [ 0, 1, 0 ] ] )
     R_NEEDLEPOSE = np.eye(3)
 
-    def __init__( self, name="ShapeSensingNeedle" ):
+    #Change
+    #def __init__( self, name="ShapeSensingNeedle" ):
+    def __init__( self, name="ShapeSensingNeedle", manual_pose=False ):
+    #End Change
         super().__init__( name )
 
+        #Change
+        self.manual_pose = manual_pose
+        self.get_logger().info(f"Manual pose mode: {self.manual_pose}")
+        #End Change
+        
         # declare ang get parameters
         self.kc_i     = np.array( [ 0.0005 ] )
         self.w_init_i = np.array( [ self.kc_i[ 0 ], 0.0, 0.0 ] )
@@ -71,6 +87,13 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # - look-up table of (insertion depth (mod ds), theta rotation (rads))
         self.history_needle_pose = np.reshape([ 0, 0 ], (-1, 1))
 
+        #Change
+        self.entrypoint_ready = False
+        self.curvatures_ready = False
+        self.pose_ready = False
+        self.ready = False
+        #End Change
+        
         # create publishers
         self.pub_kc    = self.create_publisher( Float64MultiArray, 'state/kappac', 1 )
         self.pub_winit = self.create_publisher( Float64MultiArray, 'state/winit', 1 )
@@ -97,17 +120,24 @@ class ShapeSensingNeedleNode( NeedleNode ):
             10
         )
 
-        # services
-        self.sub_needleshape_querypt = self.create_service(
-            GetPoseFromPoseArray,
-            "current_shape/query_point",
-            self.srv_needleshape_querypt_callback,
-        )
-        self.sub_needleshape_querypt = self.create_service(
-            GetPoseArray,
-            "current_shape/query",
-            self.srv_needleshape_query_callback,
-        )
+        #Change
+        self.create_timer(0.5, self.check_is_ready)
+
+        self.get_logger().info("Node initialized. Waiting for entrypoint, curvatures, and pose data...")
+        #End Change
+        #Change
+        ## services
+        #self.sub_needleshape_querypt = self.create_service(
+        #    GetPoseFromPoseArray,
+        #    "current_shape/query_point",
+        #    self.srv_needleshape_querypt_callback,
+        #)
+        #self.sub_needleshape_querypt = self.create_service(
+        #    GetPoseArray,
+        #    "current_shape/query",
+        #    self.srv_needleshape_query_callback,
+        #)
+        #End Change
 
         # create timers
         self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
@@ -308,20 +338,33 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
 
         # if
+        
+        #Change
+        self.curvatures_ready = True
+        self.get_logger().debug(f"Curvatures updated: shape={curvatures.shape}")
+        #End Change
 
     # sub_curvatures_callback
 
     def sub_entrypoint_callback( self, msg: Point ):
         """ Subscription to entrypoint topic """
-        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )  # assume it is in the
+        #Change
+        if not self.entrypoint_ready:
+            insertion_point = np.array( [ msg.x, msg.y, msg.z ] )  # assume it is in the
+            # update the insertion point relative to the initial base of the insertion point
+            self.ss_needle.insertion_point = (
+                insertion_point - self.needle_guide_exit_pt * [1, 1, 0]
+            )
+            self.entrypoint_ready = True
+            self.get_logger().info(f"Entrypoint set to {insertion_point} (locked)")
+        else:
+            new_pt = np.array([msg.x, msg.y, msg.z])
+            if not np.allclose(new_pt, self.ss_needle.insertion_point, atol=1e-6):
+                self.get_logger().warn("Received new entry point but ignoring (locked)")
 
-        # update the insertion point relative to the initial base of the insertion point
-        self.ss_needle.insertion_point = (
-            insertion_point
-            - self.needle_guide_exit_pt * [1, 1, 0]
-        )
-
-        self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
+        #self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
+        
+        #End Change
 
     # sub_entrypoint_callback
 
@@ -357,6 +400,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # else
 
+        #Change
+        self.pose_ready = True
+        self.get_logger().debug("Pose received from /needle/pose topic")
+        #End Change
+    
     # sub_needlepose_callback
             
     def srv_needleshape_query_callback(self, req: GetPoseArray.Request, res: GetPoseArray.Response):
@@ -408,14 +456,57 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # srv_query_needle_shape_callback
 
+    #Change
+    def data_is_ready(self):
+        ready = self.entrypoint_ready and self.curvatures_ready and self.pose_ready
+        if not ready:
+            missing = []
+            if not self.entrypoint_ready: missing.append("entrypoint")
+            if not self.curvatures_ready: missing.append("curvatures")
+            if not self.pose_ready: missing.append("pose")
+            self.get_logger().debug(f"Waiting on: {', '.join(missing)}")
+        return ready
+    #End Change
+    
+    #Change
+    def check_if_ready(self):
+        if not self.ready and self.data_is_ready():
+            self.ready = True
+            self.activate_services()
+    #End Change
+
+    #Change
+    def activate_services(self):
+        self.get_logger().info("All data ready. Activating needle shape services...")
+        # services
+        self.sub_needleshape_querypt = self.create_service(
+            GetPoseFromPoseArray,
+            "current_shape/query_point",
+            self.srv_needleshape_querypt_callback,
+        )
+        self.sub_needleshape_querypt = self.create_service(
+            GetPoseArray,
+            "current_shape/query",
+            self.srv_needleshape_query_callback,
+        )
+    #End Change
 
 # class: ShapeSensingNeedleNode
 
 def main( args=None ):
     rclpy.init( args=args )
 
-    ssneedle_node = ShapeSensingNeedleNode()
+    #Change
+    parser = argparse.ArgumentParser(description="Shape Sensing Needle Node")
+    parser.add_argument("--manual-pose", action="store_true", help = "Enable manual entry of pose via command line")
+    cli_args = parser.parse_args()
 
+    ssneedle_node = ShapeSensingNeedleNode(manual_pose=cli_args.manual_pose)
+    
+    #ssneedle_node = ShapeSensingNeedleNode()
+
+    #End change
+    
     try:
         rclpy.spin( ssneedle_node )
 
