@@ -4,6 +4,7 @@
 
 #Change
 import argparse
+from rclpy.executors import MultiThreadedExecutor
 #End Change
 
 import numpy as np
@@ -121,7 +122,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         )
 
         #Change
-        self.create_timer(0.5, self.check_is_ready)
+        self.create_timer(0.5, self.check_if_ready)
 
         self.get_logger().info("Node initialized. Waiting for entrypoint, curvatures, and pose data...")
         #End Change
@@ -502,21 +503,28 @@ def main( args=None ):
     cli_args = parser.parse_args()
 
     ssneedle_node = ShapeSensingNeedleNode(manual_pose=cli_args.manual_pose)
+    executor = MultiThreadedExecutor()
+    executor.add_node(ssneedle_node)
     
     #ssneedle_node = ShapeSensingNeedleNode()
 
     #End change
     
     try:
-        rclpy.spin( ssneedle_node )
-
+        #Change
+        #rclpy.spin( ssneedle_node )
+        executor.spin()
+        #End Change
     except KeyboardInterrupt:
         pass
 
     # clean-up
-    ssneedle_node.destroy_node()
-    rclpy.shutdown()
-
+    #Change
+    finally:
+        executor.shutdown()
+        ssneedle_node.destroy_node()
+        rclpy.shutdown()
+    #End Change
 
 # main
 
