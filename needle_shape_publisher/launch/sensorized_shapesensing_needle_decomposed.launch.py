@@ -22,7 +22,15 @@ def generate_launch_description():
         default_value="True",
         description="Whether to update the needle's tissue orientation based on estimated air gap orientation",
     )
-
+    ####Change
+    arg_manual_pose = DeclareLaunchArgument(
+        'manual_pose',
+        default_value='false',
+        description='Whether to manually specify the pose via CLI argument.'
+    )
+    ld.add_action(arg_manual_pose)
+    ####End Change
+    
     # Nodes
     node_sensorizedneedle = Node(
             package='needle_shape_publisher',
@@ -34,6 +42,9 @@ def generate_launch_description():
                     'needle.paramFile'                   : LaunchConfiguration( 'needleParamFile' ),
                     'needle.numberSignals'               : LaunchConfiguration( 'numSignals' ),
                     'needle.sensor.temperatureCompensate': LaunchConfiguration( 'tempCompensate' ),
+                    ####Change
+                    'manual_pose'                        : LaunchConfiguration('manual_pose'),
+                    ####End Change
                     } ]
             )
     node_ssneedle = Node(
@@ -46,6 +57,9 @@ def generate_launch_description():
                 'needle.paramFile'                               : LaunchConfiguration( 'needleParamFile' ),
                 'needle.optimizer.max_iterations'                : LaunchConfiguration( 'optimMaxIterations' ),
                 'needle.optimizer.update_orientation_with_airgap': LaunchConfiguration( 'optimNeedleUpdateOrientationAirGap' ),
+                ####Change
+                'manual_pose'                                    : LaunchConfiguration('manual_pose'),
+                ####End Change
             }],
         )
 
