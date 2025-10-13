@@ -60,6 +60,15 @@ def generate_launch_description():
         description="Whether to update the needle's tissue orientation based on estimated air gap orientation",
     )
 
+    ####Change
+    arg_manual_pose = DeclareLaunchArgument(
+        'manual_pose',
+        default_value = 'false',
+        description = 'Whether to manually specify the pose via CLI argument'
+    )
+    ld.add_action(arg_manual_pose)
+    ####End Change
+
     # included launch arguments
     ld_needlepub = IncludeLaunchDescription( # needle shape publisher
         PythonLaunchDescriptionSource(
@@ -70,6 +79,9 @@ def generate_launch_description():
             'optimMaxIterations'                : LaunchConfiguration('optimMaxIterations'),
             'tempCompensate'                    : LaunchConfiguration('tempCompensate'),
             'optimNeedleUpdateOrientationAirGap': LaunchConfiguration('optimNeedleUpdateOrientationAirGap'),
+            ####Change
+            'manual_pose'                       : LaunchConfiguration('manual_pose'),
+            ####End Change
         }.items()
     )
     # configure launch description
