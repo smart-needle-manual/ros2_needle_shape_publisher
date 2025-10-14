@@ -3,7 +3,6 @@
 #Updating Author: Rajdeep Banerjee
 
 #Change
-import argparse
 from rclpy.executors import MultiThreadedExecutor
 #End Change
 
@@ -50,12 +49,13 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     #Change
     #def __init__( self, name="ShapeSensingNeedle" ):
-    def __init__( self, name="ShapeSensingNeedle", manual_pose=False ):
+    def __init__( self, name="ShapeSensingNeedle"):
     #End Change
         super().__init__( name )
 
         #Change
-        self.manual_pose = manual_pose
+        self.declare_parameter('manual_pose', False)
+        self.manual_pose=self.get_parameter('manual_pose').get_parameter_value().bool_value
         self.get_logger().info(f"Manual pose mode: {self.manual_pose}")
         #End Change
         
@@ -498,11 +498,11 @@ def main( args=None ):
     rclpy.init( args=args )
 
     #Change
-    parser = argparse.ArgumentParser(description="Shape Sensing Needle Node")
-    parser.add_argument("--manual-pose", action="store_true", help = "Enable manual entry of pose via command line")
-    cli_args = parser.parse_args()
+    #parser = argparse.ArgumentParser(description="Shape Sensing Needle Node")
+    #parser.add_argument("--manual-pose", action="store_true", help = "Enable manual entry of pose via command line")
+    #cli_args = parser.parse_args()
 
-    ssneedle_node = ShapeSensingNeedleNode(manual_pose=cli_args.manual_pose)
+    ssneedle_node = ShapeSensingNeedleNode()
     executor = MultiThreadedExecutor()
     executor.add_node(ssneedle_node)
     
