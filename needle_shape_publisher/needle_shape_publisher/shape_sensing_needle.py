@@ -49,11 +49,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####Change
         self.manual_mode = self.declare_parameter(
             'needle.manual_mode',
-            value= 'false'
+            value= False
         ).get_parameter_value().bool_value
 
-        self.entrypoint_received = false
-        self.needlepose_received = false
+        self.entrypoint_received = False
+        self.needlepose_received = False
 
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
         ####End Change
@@ -260,7 +260,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             if not (self.entrypoint_received and self.needlepose_received):
                 self.get_logger().debug("Manual mode active --- waiting for entry point and needle pose data")
                 return
-            self.get_logger().info("Manual data received — computing shape...")
+            self.get_logger().info("Manual data received - computing shape...")
         ####End Change
         
         pmat, Rmat = self.get_needleshape()
