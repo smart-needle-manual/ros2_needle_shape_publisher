@@ -454,6 +454,16 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 def main( args=None ):
     rclpy.init( args=args )
+    ####Change
+    print("\n====================\n"
+          "Manual Mode Instructions\n"
+          "====================\n"
+          "ros2 topic pub /needle/state/skin_entry geometry_msgs/Point "
+          "'{x: 0.0, y: 0.0, z: 0.0}' --once\n"
+          "ros2 topic pub /stage/state/needle_pose geometry_msgs/PoseStamped "
+          "\"{header: {frame_id: 'needle'}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
+          "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\" --once\n")
+    ####End Change
 
     ssneedle_node = ShapeSensingNeedleNode()
 
