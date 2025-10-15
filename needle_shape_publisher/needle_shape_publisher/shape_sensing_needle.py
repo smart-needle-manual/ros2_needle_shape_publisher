@@ -181,7 +181,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         """ Get the current needle shape"""
         # TODO: incorporate rotation while inserted into tissue
         ####Change
-        self.get_logger().info(f"Current shapetype: self.ss_needle.current_shapetype}")
+        self.get_logger().info(f"Current shapetype: {self.ss_needle.current_shapetype}")
         ####End Change
 
         if self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
@@ -274,7 +274,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         try:
             self.get_logger().info("Calling get_needleshape()")
             pmat, Rmat = self.get_needleshape()
-            self.get_logger().info("get_needlshape() returned successfully")
+            self.get_logger().info("get_needleshape() returned successfully")
         except Exception as e:
             self.get_logger().error(f"Error during get_needleshape(): {e}")
             import traceback
