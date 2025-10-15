@@ -123,8 +123,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # create timers
         ####Change
-        #self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
-        self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
+        self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
+        #self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
         ####End Change
 
     # __init__
