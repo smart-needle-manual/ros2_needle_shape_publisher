@@ -79,7 +79,7 @@ def generate_launch_description():
             'tempCompensate'                    : LaunchConfiguration('tempCompensate'),
             'optimNeedleUpdateOrientationAirGap': LaunchConfiguration('optimNeedleUpdateOrientationAirGap'),
             ####Change
-            'needle.manual_mode'                : LaunchConfiguration('manual_mode'),
+            'manual_mode'                : LaunchConfiguration('manual_mode'),
             ####End Change
         }.items()
     )
