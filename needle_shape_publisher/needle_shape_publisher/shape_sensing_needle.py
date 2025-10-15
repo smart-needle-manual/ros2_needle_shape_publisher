@@ -46,6 +46,16 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.kc_i     = np.array( [ 0.0005 ] )
         self.w_init_i = np.array( [ self.kc_i[ 0 ], 0.0, 0.0 ] )
 
+        ####Change
+        self.manual_mode = self.declare_parameter(
+            'needle.manual_mode',
+            value= 'false'
+        ).get_parameter_value().bool_value
+
+        self.entrypoint_received = false
+        self.needlepose_received = false
+        ####End Change
+
         pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
                                                 description="Maximum iterations for convergence" )
         optim_maxiter = self.declare_parameter( pd_optim_maxiter.name, value=15,
@@ -243,6 +253,13 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     def publish_shape( self ):
         """ Publish the 3D needle shape"""
+        ####Change
+        if self.manual_mode:
+            if not (self.entrypoint_received and self.needlepose_received):
+                self.get_logger().debug("Manual mode active --- waiting for entry point and needle pose data")
+                return
+        ####End Change
+        
         pmat, Rmat = self.get_needleshape()
 
         # update initial kappa_c values
@@ -321,6 +338,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
             - self.needle_guide_exit_pt * [1, 1, 0]
         )
 
+        ####Change
+        self.entrypoint_received = True
+        ####End Change
+
         self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
 
     # sub_entrypoint_callback
@@ -342,6 +363,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
                 self.ss_needle.length
             )
         )
+
+        ####Change
+        self.needlepose_received = True
+        ####End Change
+        
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
 
         # update the history of orientations (NOT USED YET)
