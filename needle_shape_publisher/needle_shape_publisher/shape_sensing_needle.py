@@ -124,7 +124,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # create timers
         ####Change
         #self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
-        self.pub_shape_timer = self.create_timer( 60, self.publish_shape )
+        self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
         ####End Change
 
     # __init__
@@ -180,6 +180,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
     def get_needleshape( self ):
         """ Get the current needle shape"""
         # TODO: incorporate rotation while inserted into tissue
+        ####Change
+        self.get_logger().info(f"Current shapetype: self.ss_needle.current_shapetype}")
+        ####End Change
+
         if self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
             pmat, Rmat = self.ss_needle.get_needle_shape( self.kc_i[ 0 ], self.w_init_i )
 
@@ -266,7 +270,19 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.get_logger().info("Manual data received - computing shape...")
         ####End Change
         
-        pmat, Rmat = self.get_needleshape()
+        ####Change
+        try:
+            self.get_logger().info("Calling get_needleshape()")
+            pmat, Rmat = self.get_needleshape()
+            self.get_logger().info("get_needlshape() returned successfully")
+        except Exception as e:
+            self.get_logger().error(f"Error during get_needleshape(): {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())
+            return
+        
+        #pmat, Rmat = self.get_needleshape()
+        ####End Change
 
         # update initial kappa_c values
         self.kc_i     = self.ss_needle.current_kc
