@@ -54,6 +54,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         self.entrypoint_received = false
         self.needlepose_received = false
+
+        self.get_logger().info(f"Manual mode: {self.manual_mode}")
         ####End Change
 
         pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
@@ -258,6 +260,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             if not (self.entrypoint_received and self.needlepose_received):
                 self.get_logger().debug("Manual mode active --- waiting for entry point and needle pose data")
                 return
+            self.get_logger().info("Manual data received — computing shape...")
         ####End Change
         
         pmat, Rmat = self.get_needleshape()
@@ -301,6 +304,13 @@ class ShapeSensingNeedleNode( NeedleNode ):
             f"{self.pub_shape.topic},{self.pub_kc.topic},{self.pub_winit.topic}"
         )
 
+        ####Change
+        if self.manual_mode:
+            self.entrypoint_received = False
+            self.needlepose_received = False
+            self.get_logger().info("Shape published — waiting for next manual input.")
+        ####End Change
+
     # publish_shape
 
     async def publish_shape_async(self):
@@ -340,6 +350,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Change
         self.entrypoint_received = True
+        self.get_logger().info("Received entrypoint data (manual mode flag updated).")
         ####End Change
 
         self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
@@ -366,6 +377,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Change
         self.needlepose_received = True
+        self.get_logger().info("Received needle pose data (manual mode flag updated).")
         ####End Change
         
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
