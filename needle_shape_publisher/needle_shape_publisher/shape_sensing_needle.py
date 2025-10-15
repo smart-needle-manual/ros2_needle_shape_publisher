@@ -182,6 +182,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # TODO: incorporate rotation while inserted into tissue
         ####Change
         self.get_logger().info(f"Current shapetype: {self.ss_needle.current_shapetype}")
+        self.get_logger().info(f"kc_i: {self.kc_i}")
+        self.get_logger().info(f"w_init_i: {self.w_init_i}")
+        self.get_logger().info(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
 
         if self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
