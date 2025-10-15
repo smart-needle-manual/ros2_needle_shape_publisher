@@ -291,8 +291,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # check to make sure messages are not None
 
         if pmat is None or Rmat is None:
-            # self.get_logger().warn( f"pmat or Rmat is None: pmat={pmat}, Rmat={Rmat}" )
-            # self.get_logger().warn( f"Current shapetype: {self.ss_needle.current_shapetype}" )
+            ####Change
+            self.get_logger().warn( f"pmat or Rmat is None: pmat={pmat}, Rmat={Rmat}" )
+            self.get_logger().warn( f"Current shapetype: {self.ss_needle.current_shapetype}" )
+            ####End Change
             return
 
         # if
@@ -314,6 +316,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug( f"Needle Shapes: {pmat.shape}, {Rmat.shape}, {len( msg_shape.poses )}" )
 
         # publish the messages
+        ####Change
+        self.get_logger().info(f"Publishing shape with {len(msg_shape.poses)} poses")
+        self.get_logger().info("About to publish to /needle/state/current_shape")
+        ####End Change
         self.pub_shape.publish( msg_shape )
         ####Change
         self.get_logger().info(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
