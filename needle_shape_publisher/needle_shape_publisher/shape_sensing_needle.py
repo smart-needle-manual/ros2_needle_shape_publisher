@@ -296,6 +296,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # publish the messages
         self.pub_shape.publish( msg_shape )
+        ####Change
+        self.get_logger().info(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
+        ####End Change
         self.pub_kc.publish( msg_kc )
         self.pub_winit.publish( msg_winit )
         self.pub_depth.publish( msg_depth )
