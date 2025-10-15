@@ -23,6 +23,14 @@ def generate_launch_description():
         description="Whether to update the needle's tissue orientation based on estimated air gap orientation",
     )
 
+    ####Change
+    arg_manual_mode = DeclareLaunchArgument(
+        'manual_mode',
+        default_value='false',
+        description='Enable manual trigger mode for ShapeSensingNeedle node'
+    )
+    ####End Change
+
     # Nodes
     node_sensorizedneedle = Node(
             package='needle_shape_publisher',
@@ -46,6 +54,9 @@ def generate_launch_description():
                 'needle.paramFile'                               : LaunchConfiguration( 'needleParamFile' ),
                 'needle.optimizer.max_iterations'                : LaunchConfiguration( 'optimMaxIterations' ),
                 'needle.optimizer.update_orientation_with_airgap': LaunchConfiguration( 'optimNeedleUpdateOrientationAirGap' ),
+                ####Change
+                'needle.manual_mode'                             : LaunchConfiguration('manual_mode'),
+                ####End Change
             }],
         )
 
