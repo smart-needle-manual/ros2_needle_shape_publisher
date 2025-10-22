@@ -60,7 +60,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         #### Change Level 2
         self.manual_input_timeout = 60 # seconds before defaults applied
-        self.manual_input_timer = self.create_timer(self.manual_input_timeout, self._apply_manual_input_defaults, oneshot = True)
+        self.manual_input_timer = self.create_timer(self.manual_input_timeout, self._apply_manual_input_defaults)
         self.defaults_applied = False
         ####End Change
 
