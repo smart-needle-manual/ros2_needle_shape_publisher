@@ -58,6 +58,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
         ####End Change
 
+        #### Change Level 2
+        self.manual_input_timeout = 60 # seconds before defaults applied
+        self.manual_input_timer = self.create_timer(self.manual_input_timeout, self._apply_manual_input_defaults, oneshot = True)
+        self.defaults_applied = False
+        ####End Change
+
         pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
                                                 description="Maximum iterations for convergence" )
         optim_maxiter = self.declare_parameter( pd_optim_maxiter.name, value=15,
@@ -384,6 +390,15 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().info("Received entrypoint data (manual mode flag updated).")
         ####End Change
 
+        ####Change level 2
+        if self.entrypoint_received and self.needlepose_received:
+            try:
+                self.manual_input_timer.cancel()
+                self.get_logger().info("Manual inputs complete - canceled manual input timer")
+            except Exception:
+                pass
+        ####End Change
+
         self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
 
     # sub_entrypoint_callback
@@ -425,6 +440,14 @@ class ShapeSensingNeedleNode( NeedleNode ):
             np.hstack( (self.history_needle_pose, [ [ depth_ds ], [ theta ] ]) )
 
         # else
+        ####Change level 2
+        if self.entrypoint_received and self.needlepose_received:
+            try:
+                self.manual_input_timer.cancel()
+                self.get_logger().info("Manual inputs complete - canceled manual input timer")
+            except Exception:
+                pass
+        ####End Change
 
     # sub_needlepose_callback
             
@@ -477,6 +500,38 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # srv_query_needle_shape_callback
 
+    ####Change level 2
+    def _apply_manual_input_defaults(self):
+        if not self.manual_mode:
+            return
+        if not (self.entrypoint_received and self.needlepose_received):
+            self.get_logger().warn(f"No manual inputs received after {self.manual_input_timeout}s - applying default values.")
+            #Default skin entry at (0,0,0)
+            default_entry = np.array([0.0, 0.0, 0.0])
+            self.ss_needle.insertion_point = default_entry
+            self.entrypoint_received = True
+            self.defaults_applied = True
+            #Default needle base pose (0,0,200) with identity matrix rotation
+            default_pos = np.array([0.0, 0.0, 200.0])
+            default_rot = np.eye(3)
+            self.current_needle_pose = (default_pos, default_rot)
+            self.needlepose_received = True
+
+            try:
+                self.manual_input_timer.cancel()
+            except Exception:
+                pass
+            
+            self.get_logger().info("Applied default manual-mode needle pose and entrypoint values.")
+        else:
+            if not self.defaults_applied:
+                self.get_logger().info("Manual inputs received - disabling default timer.")
+            try:
+                self.manual_input_timer.cancel()
+            except Exception:
+                pass
+            self.defaults_applied = True
+    ####End Change
 
 # class: ShapeSensingNeedleNode
 
