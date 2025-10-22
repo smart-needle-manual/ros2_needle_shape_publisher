@@ -524,20 +524,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.sub_needlepose_callback(default_pose_msg)
 
             self.defaults_applied = True
-
-            try:
-                self.manual_input_timer.cancel()
-            except Exception:
-                pass
             
             self.get_logger().info("Applied default manual-mode needle pose and entrypoint values.")
         else:
             if not self.defaults_applied:
                 self.get_logger().info("Manual inputs received - disabling default timer.")
-            try:
-                self.manual_input_timer.cancel()
-            except Exception:
-                pass
             self.defaults_applied = True
     ####End Change
 
