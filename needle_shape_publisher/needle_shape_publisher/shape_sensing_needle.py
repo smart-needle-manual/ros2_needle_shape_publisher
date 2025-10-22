@@ -391,12 +391,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####End Change
 
         ####Change level 2
-        if self.entrypoint_received and self.needlepose_received:
-            try:
-                self.manual_input_timer.cancel()
-                self.get_logger().info("Manual inputs complete - canceled manual input timer")
-            except Exception:
-                pass
+        #if self.entrypoint_received and self.needlepose_received:
+        #    try:
+        #        self.manual_input_timer.cancel()
+        #        self.get_logger().info("Manual inputs complete - canceled manual input timer")
+        #    except Exception:
+        #        pass
         ####End Change
 
         self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
@@ -441,12 +441,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # else
         ####Change level 2
-        if self.entrypoint_received and self.needlepose_received:
-            try:
-                self.manual_input_timer.cancel()
-                self.get_logger().info("Manual inputs complete - canceled manual input timer")
-            except Exception:
-                pass
+        #if self.entrypoint_received and self.needlepose_received:
+        #    try:
+        #        self.manual_input_timer.cancel()
+        #        self.get_logger().info("Manual inputs complete - canceled manual input timer")
+        #    except Exception:
+        #        pass
         ####End Change
 
     # sub_needlepose_callback
