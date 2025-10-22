@@ -506,16 +506,24 @@ class ShapeSensingNeedleNode( NeedleNode ):
             return
         if not (self.entrypoint_received and self.needlepose_received):
             self.get_logger().warn(f"No manual inputs received after {self.manual_input_timeout}s - applying default values.")
+            #Create default ROS messages
             #Default skin entry at (0,0,0)
-            default_entry = np.array([0.0, 0.0, 0.0])
-            self.ss_needle.insertion_point = default_entry
-            self.entrypoint_received = True
+            default_entry_msg = Point(x = 0.0, y = 0.0, z = 0.0)
+            default_pose_msg = PoseStamped()
+            default_pose_msg.header.frame_id = "needle"
+            default_pose_msg.pose.position.x = 0.0
+            default_pose_msg.pose.position.y = 0.0
+            default_pose_msg.pose.position.z = 200.0
+            default_pose_msg.pose.orientation.x=0.0
+            default_pose_msg.pose.orientation.y=0.0
+            default_pose_msg.pose.orientation.z=0.0
+            default_pose_msg.pose.orientation.w=1.0
+
+            #Call the subscriber callbacks with defaults
+            self.sub_entrypoint_callback(default_entry_msg)
+            self.sub_needlepose_callback(default_pose_msg)
+
             self.defaults_applied = True
-            #Default needle base pose (0,0,200) with identity matrix rotation
-            default_pos = np.array([0.0, 0.0, 200.0])
-            default_rot = np.eye(3)
-            self.current_needle_pose = (default_pos, default_rot)
-            self.needlepose_received = True
 
             try:
                 self.manual_input_timer.cancel()
