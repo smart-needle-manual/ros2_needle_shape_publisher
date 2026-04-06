@@ -20,6 +20,8 @@ from needle_shape_publisher_interfaces.srv import (
 # needle shape sensing package
 from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDeflection
 
+####Edit: FIXME: SHAPETYPE needs to include LIM, and eventually a separate launch file
+
 # current package
 from . import utilities
 from .sensorized_shape_sensing_needle import NeedleNode
