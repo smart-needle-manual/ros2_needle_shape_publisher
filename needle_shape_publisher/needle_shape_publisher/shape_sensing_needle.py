@@ -81,6 +81,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
             value=True,
             descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
         ).get_parameter_value().bool_value
+
+        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed
+        
         self.ss_needle.optimizer.options[ 'options' ]          = { 'maxiter': optim_maxiter }
         self.ss_needle.optimizer.options[ 'w_init_bounds' ][2] = [ -1e-3, 1e-3 ]
         
@@ -141,6 +144,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # __init__
 
+    ####Edit: FIXME: May need to use setters in shell script to make life easier
+
     @property
     def insertion_depth( self ):
         return self.ss_needle.current_depth
@@ -199,6 +204,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().info(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
 
+        ####Edit: FIXME: elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM # inverse strain optim + linear interp
+        
         if self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
             pmat, Rmat = self.ss_needle.get_needle_shape( self.kc_i[ 0 ], self.w_init_i )
 
@@ -323,6 +330,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
         header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
         msg_shape = utilities.poses2msg( pmat, Rmat, header=header )
 
+        ####Edit: FIXME: Eventually will nto need the kc and winit messages below
+
+        
         # generate kappa_c and w_init message
         msg_kc    = Float64MultiArray( data=self.kc_i )
         msg_winit = Float64MultiArray( data=self.w_init_i.tolist() )
@@ -505,7 +515,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
-
+    ####Edit:FIXME: May need to change _apply_manual_input_defaults...confused atm as to why certain inputs are necessary. Need to update and think about cd line args as in main()
     ####Change level 2
     def _apply_manual_input_defaults(self):
         if not self.manual_mode:
