@@ -1,3 +1,6 @@
+####Change was for prior modifications necessary for manual/automatic inputs in place of robot dependence.
+####Edit is for new optimization method. First change occurred in linear_optim. See number of commits ahead of main to determine most recent branch.
+
 import numpy as np
 # ROS2 packages
 import rclpy
@@ -6,8 +9,6 @@ from rclpy import Parameter
 from geometry_msgs.msg import PoseArray, Point, PoseStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from std_msgs.msg import Float64MultiArray, Header, Float64
-####Change was for prior modifications necessary for manual/automatic inputs in place of robot dependence.
-####Edit is for new optimization method. First change occurred in linear_optim. See number of commits ahead of main to determine most recent branch.
 
 from std_srvs.srv import Trigger
 
