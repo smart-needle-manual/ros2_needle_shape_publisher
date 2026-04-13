@@ -84,7 +84,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
         ).get_parameter_value().bool_value
 
-        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed
+        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxiter appears to be the main one.
         
         self.ss_needle.optimizer.options[ 'options' ]          = { 'maxiter': optim_maxiter }
         self.ss_needle.optimizer.options[ 'w_init_bounds' ][2] = [ -1e-3, 1e-3 ]
@@ -223,7 +223,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         elif self.ss_needle.current_shapetype == NEEDLESHAPETYPE.CONSTANT_CURVATURE:
             pmat, Rmat = self.ss_needle.get_needle_shape()
-
+        ####Edit: FIXME: Confirm tomorrow that this call is correct given the rest of the architecture, and review said architecture
+        elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM:
+            pmat, Rmat = self.ss_needle.get_needle_shape()
         else:
             self.get_logger().error( f"Needle shape type: {self.ss_needle.current_shapetype} is not implemented." )
             self.get_logger().error( f"Resorting to shape type: {NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER}." )
