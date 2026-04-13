@@ -48,7 +48,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     def __init__( self, name="ShapeSensingNeedle" ):
         super().__init__( name )
-
+        ####Edit: FIXME: Note -- Keep kc_i/winit_i for now, publish add. params if need be
         # declare ang get parameters
         self.kc_i     = np.array( [ 0.0005 ] )
         self.w_init_i = np.array( [ self.kc_i[ 0 ], 0.0, 0.0 ] )
