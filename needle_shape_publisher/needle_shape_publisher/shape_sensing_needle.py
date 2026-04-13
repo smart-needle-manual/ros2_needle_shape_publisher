@@ -308,6 +308,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         #pmat, Rmat = self.get_needleshape()
         ####End Change
 
+        ####Edit: FIXME: This may be a source of breakage
         # update initial kappa_c values
         self.kc_i     = self.ss_needle.current_kc
         self.w_init_i = self.ss_needle.current_winit
@@ -332,7 +333,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
         msg_shape = utilities.poses2msg( pmat, Rmat, header=header )
 
-        ####Edit: FIXME: Eventually will nto need the kc and winit messages below
+        ####Edit: FIXME: Eventually will not need the kc and winit messages below
 
         
         # generate kappa_c and w_init message
