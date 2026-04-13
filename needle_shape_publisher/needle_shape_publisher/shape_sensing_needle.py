@@ -71,6 +71,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.defaults_applied = False
         ####End Change
 
+        ####Edit: FIXME: May or may not need the below...not sure
         pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
                                                 description="Maximum iterations for convergence" )
         optim_maxiter = self.declare_parameter( pd_optim_maxiter.name, value=15,
