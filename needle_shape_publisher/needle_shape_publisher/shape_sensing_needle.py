@@ -560,6 +560,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 def main( args=None ):
     rclpy.init( args=args )
+    # Node must be instantiated first so that manual_mode is available as an instance attribute
     ssneedle_node = ShapeSensingNeedleNode()
     ####Change
     if ssneedle_node.manual_mode:
