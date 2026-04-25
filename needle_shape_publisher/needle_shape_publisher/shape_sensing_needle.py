@@ -200,10 +200,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
         """ Get the current needle shape"""
         # TODO: incorporate rotation while inserted into tissue
         ####Change
-        self.get_logger().info(f"Current shapetype: {self.ss_needle.current_shapetype}")
-        self.get_logger().info(f"kc_i: {self.kc_i}")
-        self.get_logger().info(f"w_init_i: {self.w_init_i}")
-        self.get_logger().info(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
+        self.get_logger().debug(f"Current shapetype: {self.ss_needle.current_shapetype}")
+        self.get_logger().debug(f"kc_i: {self.kc_i}")
+        self.get_logger().debug(f"w_init_i: {self.w_init_i}")
+        self.get_logger().debug(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
 
         ####Edit: FIXME: elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM # inverse strain optim + linear interp
@@ -293,14 +293,14 @@ class ShapeSensingNeedleNode( NeedleNode ):
             if not (self.entrypoint_received and self.needlepose_received):
                 self.get_logger().debug("Manual mode active --- waiting for entry point and needle pose data")
                 return
-            self.get_logger().info("Manual data received - computing shape...")
+            self.get_logger().debug("Manual data received - computing shape...")
         ####End Change
         
         ####Change
         try:
-            self.get_logger().info("Calling get_needleshape()")
+            self.get_logger().debug("Calling get_needleshape()")
             pmat, Rmat = self.get_needleshape()
-            self.get_logger().info("get_needleshape() returned successfully")
+            self.get_logger().debug("get_needleshape() returned successfully")
         except Exception as e:
             self.get_logger().error(f"Error during get_needleshape(): {e}")
             import traceback
@@ -347,12 +347,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # publish the messages
         ####Change
-        self.get_logger().info(f"Publishing shape with {len(msg_shape.poses)} poses")
-        self.get_logger().info("About to publish to /needle/state/current_shape")
+        self.get_logger().debug(f"Publishing shape with {len(msg_shape.poses)} poses")
+        self.get_logger().debug("About to publish to /needle/state/current_shape")
         ####End Change
         self.pub_shape.publish( msg_shape )
         ####Change
-        self.get_logger().info(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
+        self.get_logger().debug(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
         ####End Change
         self.pub_kc.publish( msg_kc )
         self.pub_winit.publish( msg_winit )
@@ -366,7 +366,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         if self.manual_mode:
             self.entrypoint_received = False
             self.needlepose_received = False
-            self.get_logger().info("Shape published — waiting for next manual input.")
+            self.get_logger().debug("Shape published — waiting for next manual input.")
         ####End Change
 
     # publish_shape
@@ -408,7 +408,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Change
         self.entrypoint_received = True
-        self.get_logger().info("Received entrypoint data (manual mode flag updated).")
+        self.get_logger().debug("Received entrypoint data (manual mode flag updated).")
         ####End Change
 
         ####Change level 2
@@ -444,7 +444,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Change
         self.needlepose_received = True
-        self.get_logger().info("Received needle pose data (manual mode flag updated).")
+        self.get_logger().debug("Received needle pose data (manual mode flag updated).")
         ####End Change
         
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
@@ -526,7 +526,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
         if not self.manual_mode:
             return
         if not (self.entrypoint_received and self.needlepose_received):
-            self.get_logger().warn(f"No manual inputs received after {self.manual_input_timeout}s - applying default values.")
+            self.get_logger().warn(
+                f"No manual inputs received after {self.manual_input_timeout}s - applying default values.",
+                throttle_duration_sec=5.0,
+            )
             #Create default ROS messages
             #Default skin entry at (0,0,0)
             default_entry_msg = Point(x = 0.0, y = 0.0, z = 0.0)
@@ -557,18 +560,18 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 def main( args=None ):
     rclpy.init( args=args )
-    ####Change
-    print("\n====================\n"
-          "Manual Mode Instructions\n"
-          "====================\n"
-          "ros2 topic pub /needle/state/skin_entry geometry_msgs/Point "
-          "'{x: 0.0, y: 0.0, z: 0.0}' --once\n"
-          "ros2 topic pub /stage/state/needle_pose geometry_msgs/PoseStamped "
-          "\"{header: {frame_id: 'needle'}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
-          "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\" --once\n")
-    ####End Change
-
     ssneedle_node = ShapeSensingNeedleNode()
+    ####Change
+    if ssneedle_node.manual_mode:
+        ssneedle_node.get_logger().info(
+            "Manual Mode Instructions:\n"
+            "  ros2 topic pub /needle/state/skin_entry geometry_msgs/Point "
+            "'{x: 0.0, y: 0.0, z: 0.0}' --once\n"
+            "  ros2 topic pub /stage/state/needle_pose geometry_msgs/PoseStamped "
+            "\"{header: {frame_id: 'needle'}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
+            "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\" --once"
+        )
+    ####End Change
 
     try:
         rclpy.spin( ssneedle_node )
