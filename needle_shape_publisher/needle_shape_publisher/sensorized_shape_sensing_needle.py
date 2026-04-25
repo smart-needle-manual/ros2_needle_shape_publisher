@@ -1,8 +1,8 @@
 import numpy as np
 from typing import List
-
 # ROS2 packages
 import rclpy
+import rclpy.logging
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 
@@ -84,6 +84,17 @@ class NeedleNode(Node):
         self.declare_parameter( self.PARAM_AAS, descriptor=pd_numaas, value=self.ss_needle.num_activeAreas )
         self.declare_parameter( self.PARAM_SLOCS, descriptor=pd_slocs, value=self.ss_needle.sensor_location_tip.tolist() )
         self.declare_parameter( self.PARAM_AAWEIGHTS, descriptor=pd_aawgts, value=w )
+
+        # Declare a log_level parameter for runtime verbosity control
+        log_level_str = self.declare_parameter(
+            "log_level", "INFO"
+        ).get_parameter_value().string_value
+        log_level = getattr(
+            rclpy.logging.LoggingSeverity,
+            log_level_str.upper(),
+            rclpy.logging.LoggingSeverity.INFO,
+        )
+        self.get_logger().set_level(log_level)
 
     # __init__
 

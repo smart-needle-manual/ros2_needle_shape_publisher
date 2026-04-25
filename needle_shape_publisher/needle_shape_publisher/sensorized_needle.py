@@ -42,7 +42,7 @@ class SensorizedNeedleNode( NeedleNode ):
             self.get_logger().info(f"Using temperature compensation!")
 
         else:
-            self.get_logger().warn(f"Not using temperature compensation")
+            self.get_logger().info(f"Not using temperature compensation")
 
         # make all positive since we are using processed wavelengths
         self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
