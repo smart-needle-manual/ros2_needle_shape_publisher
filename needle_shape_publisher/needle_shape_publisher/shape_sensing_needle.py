@@ -224,7 +224,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         elif self.ss_needle.current_shapetype == NEEDLESHAPETYPE.CONSTANT_CURVATURE:
             pmat, Rmat = self.ss_needle.get_needle_shape()
         ####Edit: FIXME: Confirm tomorrow that this call is correct given the rest of the architecture, and review said architecture
-        elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM:
+        elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP == NEEDLESHAPETYPE.PIECEWISE_EXP:
             pmat, Rmat = self.ss_needle.get_needle_shape()
         else:
             self.get_logger().error( f"Needle shape type: {self.ss_needle.current_shapetype} is not implemented." )
