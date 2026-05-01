@@ -80,7 +80,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
         ).get_parameter_value().bool_value
 
-        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxiter appears to be the main one.
+        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxit[...]
         
         self.ss_needle.optimizer.options[ 'options' ]          = { 'maxiter': optim_maxiter }
         self.ss_needle.optimizer.options[ 'w_init_bounds' ][2] = [ -1e-3, 1e-3 ]
@@ -137,7 +137,20 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # create timers
         ####Change
         self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
-        #self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
+        # self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
+        # NOTE: In `needle.manual_mode`, `publish_shape()` will only compute/publish
+        # once BOTH `/needle/state/skin_entry` (geometry_msgs/msg/Point) and
+        # `/stage/state/needle_pose` (geometry_msgs/msg/PoseStamped) have been received.
+        #
+        # For manual teleop/testing, you typically want to publish these two topics
+        # continuously (or at least back-to-back) and include `header.frame_id` in
+        # the PoseStamped. Example continuous publishers:
+        #
+        #   ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
+        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
+        #
+        # Using `--once` is fine for single-shot updates, but for robust operation
+        # it is often better to continuously publish both inputs.
         ####End Change
 
     # __init__
@@ -457,6 +470,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.history_needle_pose[ 1, idx ] = theta
 
         # if
+
         else:  # add a new value
             np.hstack( (self.history_needle_pose, [ [ depth_ds ], [ theta ] ]) )
 
@@ -530,11 +544,15 @@ def main( args=None ):
     if ssneedle_node.manual_mode:
         ssneedle_node.get_logger().info(
             "Manual Mode Instructions:\n"
-            "  ros2 topic pub /needle/state/skin_entry geometry_msgs/Point "
-            "'{x: 0.0, y: 0.0, z: 0.0}' --once\n"
-            "  ros2 topic pub /stage/state/needle_pose geometry_msgs/PoseStamped "
-            "\"{header: {frame_id: 'needle'}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
-            "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\" --once"
+            "  Publish /needle/state/skin_entry (geometry_msgs/msg/Point) and /stage/state/needle_pose "
+            "(geometry_msgs/msg/PoseStamped) with header.frame_id set (e.g., 'needle').\n"
+            "  For robust operation during teleop/testing, publish both topics continuously (or at least back-to-back).\n"
+            "  Examples:\n"
+            "    ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "
+            "\"{x: 0.0, y: 0.0, z: 0.0}\"\n"
+            "    ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "
+            "\"{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
+            "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\"\n"
         )
     ####End Change
 
