@@ -1,0 +1,147 @@
+import sys
+import os
+import json
+from ament_index_python.packages import get_package_share_directory
+
+from launch import LaunchDescription, actions, conditions
+from launch.substitutions.launch_configuration import LaunchConfiguration
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.substitutions import (
+    PythonExpression,
+    TextSubstitution,
+    PathJoinSubstitution,
+)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+
+pkg_hyperion_interrogator = get_package_share_directory('hyperion_interrogator')
+pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher')
+
+
+# Determine numChs and numAAs from needleParamFile
+def determineCHsAAs(needleParamFile: str):
+    """Determine the number of channels and active areas available."""
+    with open(needleParamFile, 'r') as paramFile:
+        params = json.load(paramFile)
+    numChs = params['# channels']
+    numAAs = params['# active areas']
+    return numChs, numAAs
+
+
+def generate_launch_description():
+    ld = LaunchDescription()
+
+    # Set numChs and numAAs
+    numCHs, numAAs = 3, 4
+    for arg in sys.argv:
+        if arg.startswith('needleParamFile:='):
+            needleParamFile = arg.split(':=')[1]
+            numCHs, numAAs = determineCHsAAs(needleParamFile)
+
+    # Arguments
+    arg_simlevel = DeclareLaunchArgument(
+        'sim_level',
+        default_value='1',
+        description='Simulation level: 1 - shape-driven virtual sensors, 2 - real sensors'
+    )
+    arg_params = DeclareLaunchArgument(
+        'needleParamFile',
+        default_value='3CH-4AA-0005_needle_params_2022-01-26_Jig-Calibration_best_weights.json',
+        description='The shape-sensing needle parameter json file'
+    )
+    arg_interrIP = DeclareLaunchArgument(
+        'interrogatorIP',
+        default_value='10.0.0.55',
+        description='Interrogator IP'
+    )
+    arg_manual_mode = DeclareLaunchArgument(
+        'manual_mode',
+        default_value='false',
+        description='Enable manual trigger mode for ShapeSensingNeedleNode'
+    )
+    # Shape file for sim_level=1 shape-driven simulation
+    arg_sim_shape_file = DeclareLaunchArgument(
+        'sim_shape_file',
+        default_value=PathJoinSubstitution([
+            pkg_needle_shape_publisher, 'needle_data', 'sim_shape_default.yaml'
+        ]),
+        description=(
+            'Path to YAML/JSON shape file used by sim_level=1 to generate '
+            'shape-driven FBG wavelength shifts. '
+            'Format: {shape: [[x0,y0,z0], [x1,y1,z1], ...]} (mm).'
+        )
+    )
+    # Insertion depth used when computing curvatures from the shape file
+    arg_sim_insertion_depth = DeclareLaunchArgument(
+        'sim_insertion_depth',
+        default_value='100.0',
+        description=(
+            'Current insertion depth (mm) used together with the shape file '
+            'to locate sensor active areas along the polyline.'
+        )
+    )
+
+    num_signals_to_collect = 50
+
+    # Needle shape publisher
+    ld_needlepub = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_needle_shape_publisher, 'needle.launch.py')),
+        launch_arguments={
+            'needleParamFile': LaunchConfiguration(arg_params.name),
+            'numSignals': TextSubstitution(text=str(num_signals_to_collect)),
+            'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
+            'manual_mode': LaunchConfiguration('manual_mode'),
+        }.items()
+    )
+
+    # Hyperion Interrogator – shape-driven virtual demo (sim_level=1)
+    ld_hyperiondemo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_hyperion_interrogator, 'hyperion_demo.launch.py')),
+        condition=conditions.IfCondition(
+            PythonExpression([LaunchConfiguration('sim_level'), ' == 1'])
+        ),
+        launch_arguments={
+            'ip': LaunchConfiguration('interrogatorIP'),
+            'numCH': TextSubstitution(text=str(numCHs)),
+            'numAA': TextSubstitution(text=str(numAAs)),
+            'numSamples': TextSubstitution(text=str(num_signals_to_collect)),
+            'needleParamFile': PathJoinSubstitution([
+                pkg_needle_shape_publisher, 'needle_data',
+                LaunchConfiguration(arg_params.name)
+            ]),
+            # New sim_level=1 shape-driven parameters
+            'sim_shape_file': LaunchConfiguration('sim_shape_file'),
+            'sim_insertion_depth': LaunchConfiguration('sim_insertion_depth'),
+        }.items()
+    )
+
+    ld_hyperionstream = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_hyperion_interrogator, 'hyperion_streamer.launch.py')),
+        condition=conditions.IfCondition(
+            PythonExpression([LaunchConfiguration('sim_level'), ' == 2'])
+        ),
+        launch_arguments={
+            'ip': LaunchConfiguration('interrogatorIP'),
+            'numSamples': TextSubstitution(text=str(num_signals_to_collect)),
+            'needleParamFile': PathJoinSubstitution([
+                pkg_needle_shape_publisher, 'needle_data',
+                LaunchConfiguration(arg_params.name)
+            ]),
+        }.items()
+    )
+
+    # Add to launch description
+    ld.add_action(arg_simlevel)
+    ld.add_action(arg_params)
+    ld.add_action(arg_interrIP)
+    ld.add_action(arg_manual_mode)
+    ld.add_action(arg_sim_shape_file)
+    ld.add_action(arg_sim_insertion_depth)
+
+    ld.add_action(ld_needlepub)
+    ld.add_action(ld_hyperiondemo)
+    ld.add_action(ld_hyperionstream)
+
+    return ld

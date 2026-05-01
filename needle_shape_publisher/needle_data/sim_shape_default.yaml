@@ -1,0 +1,42 @@
+# sim_shape_default.yaml
+#
+# Default simulation shape for sim_level=1 (shape-driven FBG demo).
+#
+# Represents a planar circular arc in the x-z plane with a constant
+# curvature of kappa = 0.003 rad/mm (radius R ≈ 333 mm) and a total
+# arc length of 100 mm.
+#
+# Points are in mm, from the tissue entry point (index 0) at the origin
+# to the needle tip (index -1).
+#
+# To use a custom shape, create a YAML (or JSON) file in the same format
+# and pass its path to the sim_shape_file launch argument:
+#
+#   ros2 launch needle_shape_publisher sim_needle.launch.py \
+#       sim_shape_file:=/path/to/your_shape.yaml
+
+# Needle metadata assumed by this default shape
+# insertion_depth: 100.0   # mm  (matches arc length)
+
+shape:
+  - [0.0000, 0.0000, 0.0000]
+  - [0.0375, 0.0000, 4.9998]
+  - [0.1500, 0.0000, 9.9985]
+  - [0.3374, 0.0000, 14.9949]
+  - [0.5998, 0.0000, 19.9880]
+  - [0.9371, 0.0000, 24.9766]
+  - [1.3491, 0.0000, 29.9595]
+  - [1.8358, 0.0000, 34.9357]
+  - [2.3971, 0.0000, 39.9041]
+  - [3.0329, 0.0000, 44.8634]
+  - [3.7430, 0.0000, 49.8127]
+  - [4.5272, 0.0000, 54.7508]
+  - [5.3854, 0.0000, 59.6765]
+  - [6.3174, 0.0000, 64.5888]
+  - [7.3230, 0.0000, 69.4866]
+  - [8.4020, 0.0000, 74.3688]
+  - [9.5540, 0.0000, 79.2342]
+  - [10.7789, 0.0000, 84.0818]
+  - [12.0764, 0.0000, 88.9105]
+  - [13.4461, 0.0000, 93.7192]
+  - [14.8878, 0.0000, 98.5067]
