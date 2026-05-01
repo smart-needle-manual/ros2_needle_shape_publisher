@@ -545,15 +545,14 @@ def main( args=None ):
         ssneedle_node.get_logger().info(
             """Manual Mode Instructions (copy/paste):
     bash -lc '
-    ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
-    ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
-      header: {frame_id: needle},
-      pose: {
-        position: {x: 0.0, y: 0.0, z: 0.050},
-        orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
-      }
-    }"
-    sleep 0.10
+      ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}" &
+      ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
+        header: {frame_id: needle},
+        pose: {
+          position: {x: 0.0, y: 0.0, z: 0.050},
+          orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+        }
+      }"
     '
     """
         )
