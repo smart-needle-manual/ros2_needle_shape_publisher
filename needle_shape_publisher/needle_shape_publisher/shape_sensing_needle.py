@@ -545,8 +545,8 @@ def main( args=None ):
         ssneedle_node.get_logger().info(
             "Manual Mode Instructions:\n"
             "bash -lc '\n"
-            "ros2 topic pub --once /needle/state/skin_entry geometry_msgs/msg/Point \"{x: 0.0, y: 0.0, z: 0.0}\"\n"
-            "ros2 topic pub --once /stage/state/needle_pose geometry_msgs/msg/PoseStamped \"{\n"
+            "ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point \"{x: 0.0, y: 0.0, z: 0.0}\"\n"
+            "ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped \"{\n"
             "  header: {frame_id: needle},\n"
             "  pose: {\n"
             "    position: {x: 0.0, y: 0.0, z: 0.050},\n"
