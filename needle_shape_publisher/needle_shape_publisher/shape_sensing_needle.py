@@ -65,12 +65,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
         ####End Change
 
-        #### Change Level 2
-        self.manual_input_timeout = 0.05 # seconds before defaults applied
-        self.manual_input_timer = self.create_timer(self.manual_input_timeout, self._apply_manual_input_defaults)
-        self.defaults_applied = False
-        ####End Change
-
         ####Edit: FIXME: May or may not need the below...not sure
         pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
                                                 description="Maximum iterations for convergence" )
@@ -520,42 +514,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
-    ####Edit:FIXME: May need to change _apply_manual_input_defaults...confused atm as to why certain inputs are necessary. Need to update and think about cd line args as in main()
-    ####Change level 2
-    def _apply_manual_input_defaults(self):
-        if not self.manual_mode:
-            return
-        if not (self.entrypoint_received and self.needlepose_received):
-            self.get_logger().warn(
-                f"No manual inputs received after {self.manual_input_timeout}s - applying default values.",
-                throttle_duration_sec=5.0,
-            )
-            #Create default ROS messages
-            #Default skin entry at (0,0,0)
-            default_entry_msg = Point(x = 0.0, y = 0.0, z = 0.0)
-            default_pose_msg = PoseStamped()
-            default_pose_msg.header.frame_id = "needle"
-            default_pose_msg.pose.position.x = 0.0
-            default_pose_msg.pose.position.y = 0.0
-            default_pose_msg.pose.position.z = 200.0
-            default_pose_msg.pose.orientation.x=0.0
-            default_pose_msg.pose.orientation.y=0.0
-            default_pose_msg.pose.orientation.z=0.0
-            default_pose_msg.pose.orientation.w=1.0
-
-            #Call the subscriber callbacks with defaults
-            self.sub_entrypoint_callback(default_entry_msg)
-            self.sub_needlepose_callback(default_pose_msg)
-
-            self.defaults_applied = True
-            
-            self.get_logger().info("Applied default manual-mode needle pose and entrypoint values.")
-        else:
-            if not self.defaults_applied:
-                self.get_logger().info("Manual inputs received - disabling default timer.")
-            self.defaults_applied = True
-    ####End Change
-
 # class: ShapeSensingNeedleNode
 
 def main( args=None ):

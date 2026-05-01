@@ -89,6 +89,7 @@ def generate_launch_description():
     ld.add_action(arg_optim_maxiter)
     ld.add_action(arg_temp_compensate)
     ld.add_action(arg_optim_update_ornt_airgap)
+    ld.add_action(arg_manual_mode)
 
     ld.add_action(ld_needlepub)
 

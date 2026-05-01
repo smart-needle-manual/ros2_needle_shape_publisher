@@ -104,6 +104,7 @@ def generate_launch_description():
     ld.add_action(arg_simlevel)
     ld.add_action(arg_params)
     ld.add_action(arg_interrIP)
+    ld.add_action(arg_manual_mode)
    
     ld.add_action(ld_needlepub)
     ld.add_action(ld_hyperiondemo)
