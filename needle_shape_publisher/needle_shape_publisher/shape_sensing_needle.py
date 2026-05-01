@@ -147,7 +147,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # the PoseStamped. Example continuous publishers:
         #
         #   ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
-        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
+        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w[...]
         #
         # Using `--once` is fine for single-shot updates, but for robust operation
         # it is often better to continuously publish both inputs.
@@ -544,20 +544,17 @@ def main( args=None ):
     if ssneedle_node.manual_mode:
         ssneedle_node.get_logger().info(
             "Manual Mode Instructions:\n"
-            "  Publish /needle/state/skin_entry (geometry_msgs/msg/Point) and /stage/state/needle_pose "
-            "(geometry_msgs/msg/PoseStamped) with header.frame_id set (e.g., 'needle').\n"
-            "  For robust operation during teleop/testing, publish both topics continuously (or at least back-to-back).\n"
-            "  Examples:\n"bash -lc '
-            ros2 topic pub --once /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}" &
-            ros2 topic pub --once /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
-            header: {frame_id: needle},
-            pose: {
-            position: {x: 0.0, y: 0.0, z: 0.050},
-            orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
-            }
-            }" &
-            wait
-            sleep 0.10'"
+            "  Publish /needle/state/skin_entry (geometry_msgs/msg/Point) and "
+            "/stage/state/needle_pose (geometry_msgs/msg/PoseStamped) with "
+            "header.frame_id set (e.g., 'needle').\n"
+            "  For robust operation during teleop/testing, publish both topics continuously "
+            "(or at least back-to-back).\n"
+            "  Examples:\n"
+            "    ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "
+            "\"{x: 0.0, y: 0.0, z: 0.0}\"\n"
+            "    ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "
+            "\"{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, "
+            "orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}\"\n"
         )
     ####End Change
 
