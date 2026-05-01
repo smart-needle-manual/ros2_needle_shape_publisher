@@ -44,6 +44,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
     # R_NEEDLEPOSE = np.array( [ [ -1, 0, 0 ],
     #                            [ 0, 0, 1 ],
     #                            [ 0, 1, 0 ] ] )
+    # The needle frame is assumed to be the world frame, and the stage z-axis is
+    # assumed to be aligned with the needle insertion axis, so no rotation is needed.
     R_NEEDLEPOSE = np.eye(3)
 
     def __init__( self, name="ShapeSensingNeedle" ):
@@ -392,7 +394,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     def sub_entrypoint_callback( self, msg: Point ):
         """ Subscription to entrypoint topic """
-        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )  # assume it is in the
+        # skin_entry is assumed to be in the needle/world frame (needle frame == world frame)
+        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )
 
         # update the insertion point relative to the initial base of the insertion point
         self.ss_needle.insertion_point = (
@@ -427,7 +430,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         self.current_needle_pose[ 1 ] = self.current_needle_pose[ 1 ] @ self.R_NEEDLEPOSE  # update current needle pose
 
-        # update the insertion depth (y-coordinate is the insertion depth)
+        # update the insertion depth along the z-axis (stage z-axis == insertion axis).
+        # Assumes stage z=0 when the needle tip is exactly at the skin surface,
+        # so depth = needle_base_z - skin_entry_z gives depth into tissue.
         self.insertion_depth = max(
             0,
             min(
@@ -444,6 +449,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
 
         # update the history of orientations (NOT USED YET)
+        # Uses raw stage z (not depth into tissue); valid only when stage z=0 at skin contact.
         depth_ds = msg.pose.position.z - msg.pose.position.z % self.ss_needle.ds
         theta    = msg.pose.orientation.z
         if np.any( self.history_needle_pose[ 0 ] == depth_ds ):  # check if we already have this value
