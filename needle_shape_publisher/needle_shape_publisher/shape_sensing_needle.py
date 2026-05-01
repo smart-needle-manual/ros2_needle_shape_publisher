@@ -543,18 +543,19 @@ def main( args=None ):
     ####Change
     if ssneedle_node.manual_mode:
         ssneedle_node.get_logger().info(
-            "Manual Mode Instructions:\n"
-            "bash -lc '\n"
-            "ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point \"{x: 0.0, y: 0.0, z: 0.0}\"\n"
-            "ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped \"{\n"
-            "  header: {frame_id: needle},\n"
-            "  pose: {\n"
-            "    position: {x: 0.0, y: 0.0, z: 0.050},\n"
-            "    orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}\n"
-            "  }\n"
-            "}\"\n"
-            "sleep 0.10\n"
-            "'"
+            """Manual Mode Instructions (copy/paste):
+    bash -lc '
+    ros2 topic pub --once /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
+    ros2 topic pub --once /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
+      header: {frame_id: needle},
+      pose: {
+        position: {x: 0.0, y: 0.0, z: 0.050},
+        orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+      }
+    }"
+    sleep 0.10
+    '
+    """
         )
     ####End Change
 
