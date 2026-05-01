@@ -57,7 +57,7 @@ def make_circular_arc(kappa, L=100.0, n=51):
     return np.column_stack([x, y, z])
 
 
-def dummy_needle_params_json(tmp_path, num_chs=3, num_aas=2):
+def make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2):
     """Write a minimal needle param JSON and return its path."""
     # Use identity calibration matrices so Δλ = kappa directly
     cal_mats = {}
@@ -205,7 +205,7 @@ class TestWavelengthShiftInversion:
 
     def test_roundtrip_with_identity_cal_matrix(self, tmp_path):
         """With identity calibration, Δλ ≈ [κx, κy, 0] at each sensor."""
-        param_file = dummy_needle_params_json(tmp_path, num_chs=3, num_aas=2)
+        param_file = make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2)
         (cal_matrices, sensor_locs_from_tip,
          num_chs, num_aas, _) = load_needle_params_json(param_file)
 
