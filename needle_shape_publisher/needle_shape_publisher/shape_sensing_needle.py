@@ -44,6 +44,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
     # R_NEEDLEPOSE = np.array( [ [ -1, 0, 0 ],
     #                            [ 0, 0, 1 ],
     #                            [ 0, 1, 0 ] ] )
+    # The needle frame is assumed to be the world frame, and the stage z-axis is
+    # assumed to be aligned with the needle insertion axis, so no rotation is needed.
     R_NEEDLEPOSE = np.eye(3)
 
     def __init__( self, name="ShapeSensingNeedle" ):
@@ -63,12 +65,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.needlepose_received = False
 
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
-        ####End Change
-
-        #### Change Level 2
-        self.manual_input_timeout = 0.05 # seconds before defaults applied
-        self.manual_input_timer = self.create_timer(self.manual_input_timeout, self._apply_manual_input_defaults)
-        self.defaults_applied = False
         ####End Change
 
         ####Edit: FIXME: May or may not need the below...not sure
@@ -398,7 +394,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     def sub_entrypoint_callback( self, msg: Point ):
         """ Subscription to entrypoint topic """
-        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )  # assume it is in the
+        # skin_entry is assumed to be in the needle/world frame (needle frame == world frame)
+        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )
 
         # update the insertion point relative to the initial base of the insertion point
         self.ss_needle.insertion_point = (
@@ -433,7 +430,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         self.current_needle_pose[ 1 ] = self.current_needle_pose[ 1 ] @ self.R_NEEDLEPOSE  # update current needle pose
 
-        # update the insertion depth (y-coordinate is the insertion depth)
+        # update the insertion depth along the z-axis (stage z-axis == insertion axis).
+        # Assumes stage z=0 when the needle tip is exactly at the skin surface,
+        # so depth = needle_base_z - skin_entry_z gives depth into tissue.
         self.insertion_depth = max(
             0,
             min(
@@ -450,6 +449,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
 
         # update the history of orientations (NOT USED YET)
+        # Uses raw stage z (not depth into tissue); valid only when stage z=0 at skin contact.
         depth_ds = msg.pose.position.z - msg.pose.position.z % self.ss_needle.ds
         theta    = msg.pose.orientation.z
         if np.any( self.history_needle_pose[ 0 ] == depth_ds ):  # check if we already have this value
@@ -520,42 +520,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
-    ####Edit:FIXME: May need to change _apply_manual_input_defaults...confused atm as to why certain inputs are necessary. Need to update and think about cd line args as in main()
-    ####Change level 2
-    def _apply_manual_input_defaults(self):
-        if not self.manual_mode:
-            return
-        if not (self.entrypoint_received and self.needlepose_received):
-            self.get_logger().warn(
-                f"No manual inputs received after {self.manual_input_timeout}s - applying default values.",
-                throttle_duration_sec=5.0,
-            )
-            #Create default ROS messages
-            #Default skin entry at (0,0,0)
-            default_entry_msg = Point(x = 0.0, y = 0.0, z = 0.0)
-            default_pose_msg = PoseStamped()
-            default_pose_msg.header.frame_id = "needle"
-            default_pose_msg.pose.position.x = 0.0
-            default_pose_msg.pose.position.y = 0.0
-            default_pose_msg.pose.position.z = 200.0
-            default_pose_msg.pose.orientation.x=0.0
-            default_pose_msg.pose.orientation.y=0.0
-            default_pose_msg.pose.orientation.z=0.0
-            default_pose_msg.pose.orientation.w=1.0
-
-            #Call the subscriber callbacks with defaults
-            self.sub_entrypoint_callback(default_entry_msg)
-            self.sub_needlepose_callback(default_pose_msg)
-
-            self.defaults_applied = True
-            
-            self.get_logger().info("Applied default manual-mode needle pose and entrypoint values.")
-        else:
-            if not self.defaults_applied:
-                self.get_logger().info("Manual inputs received - disabling default timer.")
-            self.defaults_applied = True
-    ####End Change
-
 # class: ShapeSensingNeedleNode
 
 def main( args=None ):
