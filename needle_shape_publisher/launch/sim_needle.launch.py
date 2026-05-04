@@ -5,7 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription, actions, conditions
 from launch.substitutions.launch_configuration import LaunchConfiguration
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, ExecuteProcess, TimerAction
 from launch.substitutions import (
     PythonExpression,
     TextSubstitution,
@@ -146,5 +146,50 @@ def generate_launch_description():
     ld.add_action(ld_needlepub)
     ld.add_action(ld_hyperiondemo)
     ld.add_action(ld_hyperionstream)
+
+    # ---------------------------------------------------------------------------
+    # Sim-only helpers: publish the two topics that ShapeSensingNeedleNode needs
+    # ---------------------------------------------------------------------------
+
+    # Continuously publish /stage/state/needle_pose so that the node computes a
+    # non-zero insertion depth.  pose.position.z is set to sim_insertion_depth.
+    needle_pose_pub = ExecuteProcess(
+        cmd=[
+            'ros2', 'topic', 'pub', '--rate', '10',
+            '/stage/state/needle_pose',
+            'geometry_msgs/msg/PoseStamped',
+            [
+                '{"header": {"frame_id": "needle"}, '
+                '"pose": {"position": {"x": 0.0, "y": 0.0, "z": ',
+                LaunchConfiguration('sim_insertion_depth'),
+                '}, "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
+            ],
+        ],
+        output='screen',
+    )
+
+    # Auto-call the sensor calibrate service so that /needle/sensor/processed
+    # starts flowing without manual intervention.  A short delay ensures the
+    # hyperion_demo node is fully up before the call is made.
+    # NOTE: the service name 'sensor/calibrate' must match the name registered
+    #       in HyperionPublisher.  Verify against the hyperion_interrogator
+    #       package if a different name is used.
+    calibrate_service_call = TimerAction(
+        period=5.0,
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    'ros2', 'service', 'call',
+                    '/needle/sensor/calibrate',
+                    'std_srvs/srv/Trigger',
+                    '{}',
+                ],
+                output='screen',
+            ),
+        ],
+    )
+
+    ld.add_action(needle_pose_pub)
+    ld.add_action(calibrate_service_call)
 
     return ld

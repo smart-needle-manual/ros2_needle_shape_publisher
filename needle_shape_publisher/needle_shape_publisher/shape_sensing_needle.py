@@ -38,6 +38,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
     PARAM_OPTIM_MAXITER    = ".".join( [ PARAM_OPTIMIZER, 'max_iterations' ] )
     PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
     PARAM_OPTIM_MAXITER_LB = 2
+    PARAM_INITIAL_INSERTION_POINT = ".".join( [ NeedleNode.PARAM_NEEDLE, 'initial_insertion_point' ] )
 
     # needle pose parameters
     # R_NEEDLEPOSE = geometry.rotx( -np.pi / 2 )  # +z-axis -> +y-axis
@@ -89,6 +90,21 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.ss_needle.current_depth      = 0
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
+
+        # Initialise insertion point from a ROS parameter so the sim (and any
+        # launch file) can set a valid value without needing a subscriber message
+        # on /needle/state/skin_entry.  Defaults to the origin [0, 0, 0].
+        pd_init_ins_pt = ParameterDescriptor(
+            name=self.PARAM_INITIAL_INSERTION_POINT,
+            type=Parameter.Type.DOUBLE_ARRAY.value,
+            description="Initial skin-entry insertion point [x, y, z] in mm (world frame).",
+        )
+        init_insertion_point = self.declare_parameter(
+            pd_init_ins_pt.name,
+            descriptor=pd_init_ins_pt,
+            value=[ 0.0, 0.0, 0.0 ],
+        ).get_parameter_value().double_array_value
+        self.ss_needle.insertion_point = np.array( list( init_insertion_point ) )
 
         # configure current needle pose parameters
         self.current_needle_pose = (np.zeros( 3 ), self.R_NEEDLEPOSE)

@@ -74,6 +74,15 @@ class HyperionDemo( HyperionPublisher ):
 
         # for
 
+        # Guard: seed ref_wavelengths with base_wavelengths so that
+        # process_signals() has valid reference values even before the
+        # sensor/calibrate service is called.  setdefault leaves any
+        # already-calibrated channel untouched.
+        for ch, wl in self.base_wavelengths.items():
+            self.ref_wavelengths.setdefault( ch, wl.copy() )
+
+        # for
+
         """ Connect demo override """
         if (self.num_chs > 0) and (self.num_aa > 0):
             # configure demo interrogator
