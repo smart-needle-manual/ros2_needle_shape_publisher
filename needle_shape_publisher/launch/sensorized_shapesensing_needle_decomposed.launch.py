@@ -40,7 +40,7 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[ {
                     'needle.paramFile'                   : LaunchConfiguration( 'needleParamFile' ),
-                    'needle.numberSignals'               : LaunchConfiguration( 'numSignals' ),
+                    'needle.sensor.numberSignals'        : LaunchConfiguration( 'numSignals' ),
                     'needle.sensor.temperatureCompensate': LaunchConfiguration( 'tempCompensate' ),
                     } ]
             )

@@ -217,10 +217,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Edit: FIXME: elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM # inverse strain optim + linear interp
         
-        if self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
+        if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER) == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
             pmat, Rmat = self.ss_needle.get_needle_shape( self.kc_i[ 0 ], self.w_init_i )
 
-        elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_DOUBLELAYER == 0x02:  # 2 layers
+        elif (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_DOUBLELAYER) == NEEDLESHAPETYPE.SINGLEBEND_DOUBLELAYER:  # 2 layers
             kc1 = self.kc_i[0]
             kc2 = kc1
             if len( self.kc_i ) >= 2:
@@ -233,7 +233,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         elif self.ss_needle.current_shapetype == NEEDLESHAPETYPE.CONSTANT_CURVATURE:
             pmat, Rmat = self.ss_needle.get_needle_shape()
         ####Edit: FIXME: Confirm tomorrow that this call is correct given the rest of the architecture, and review said architecture
-        elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP == NEEDLESHAPETYPE.PIECEWISE_EXP:
+        elif (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
             pmat, Rmat = self.ss_needle.get_needle_shape()
         else:
             self.get_logger().error( f"Needle shape type: {self.ss_needle.current_shapetype} is not implemented." )
