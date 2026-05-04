@@ -15,6 +15,7 @@ from std_srvs.srv import Trigger
 from needle_shape_publisher_interfaces.srv import (
     GetPoseFromPoseArray,
     GetPoseArray,
+    UpdateShapeType,
 )
 
 # needle shape sensing package
@@ -177,6 +178,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
             GetPoseArray,
             "current_shape/query",
             self.srv_needleshape_query_callback,
+        )
+        self.srv_update_shapetype = self.create_service(
+            UpdateShapeType,
+            "shapetype/update",
+            self.srv_update_shapetype_callback,
         )
 
         # create timers
@@ -579,6 +585,46 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
+    def srv_update_shapetype_callback(self, req: UpdateShapeType.Request, res: UpdateShapeType.Response):
+        """ Service to dynamically update the needle shape type at runtime.
+
+            Call example:
+              ros2 service call /needle/shapetype/update \\
+                needle_shape_publisher_interfaces/srv/UpdateShapeType \\
+                "{shape_type: 1}"
+        """
+        shape_type_int = req.shape_type
+        try:
+            new_shapetype = NEEDLESHAPETYPE(shape_type_int)
+        except ValueError:
+            res.success = False
+            valid_values = ", ".join(
+                f"{m.name}={m.value}" for m in NEEDLESHAPETYPE
+            )
+            res.message = (
+                f"Unknown shape_type value {shape_type_int}. "
+                f"Valid values: {valid_values}."
+            )
+            self.get_logger().error(res.message)
+            return res
+
+        old_shapetype = self.ss_needle.current_shapetype
+        self.ss_needle.update_shapetype(new_shapetype)
+
+        # Keep the ROS parameter in sync so `ros2 param get` reflects reality.
+        self.set_parameters([
+            Parameter(self.PARAM_NEEDLESHAPE, Parameter.Type.INTEGER, shape_type_int)
+        ])
+
+        res.success = True
+        res.message = (
+            f"Shape type updated from {old_shapetype} to {self.ss_needle.current_shapetype}."
+        )
+        self.get_logger().info(res.message)
+        return res
+
+    # srv_update_shapetype_callback
+
 # class: ShapeSensingNeedleNode
 
 def main( args=None ):

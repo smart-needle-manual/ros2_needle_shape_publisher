@@ -1,0 +1,6 @@
+# Request: integer value of needle_shape_sensing.intrinsics.SHAPETYPE to switch to.
+int32 shape_type
+---
+# Response
+bool success      # true if the shape type was updated successfully
+string message    # human-readable confirmation or error description
