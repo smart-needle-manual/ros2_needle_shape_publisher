@@ -1,0 +1,328 @@
+"""test_shape_to_wavelength.py
+
+Unit tests for needle_shape_publisher.shape_to_wavelength.
+
+These tests verify the roundtrip property:
+    shape  →  Δλ  →  curvature  ≈  expected curvature from shape.
+
+Run with pytest (no ROS2 environment required):
+
+    cd needle_shape_publisher
+    python -m pytest test/test_shape_to_wavelength.py -v
+"""
+
+import json
+import os
+import tempfile
+
+import numpy as np
+import pytest
+
+from needle_shape_publisher.shape_to_wavelength import (
+    build_parallel_transport_frame,
+    compute_arc_lengths,
+    compute_curvature_components,
+    compute_tangents,
+    curvatures_to_wavelength_shifts,
+    interpolate_curvature_at_sensors,
+    load_needle_params_json,
+    load_shape_file,
+    shape_to_wavelength_shifts,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_HERE = os.path.dirname(__file__)
+_NEEDLE_DATA = os.path.join(
+    _HERE, '..', 'needle_data', '3CH-4AA-0005',
+    '3CH-4AA-0005_needle_params_2022-01-26_Jig-Calibration_best_weights.json',
+)
+_DEFAULT_SHAPE_YAML = os.path.join(
+    _HERE, '..', 'needle_data', 'sim_shape_default.yaml',
+)
+
+
+def make_circular_arc(kappa, L=100.0, n=51):
+    """Generate a planar circular arc in the x-z plane.
+
+    Returns (N,3) array of points, one-dimensional curvature = kappa (rad/mm).
+    """
+    R = 1.0 / kappa
+    s = np.linspace(0, L, n)
+    x = R * (1.0 - np.cos(s / R))
+    y = np.zeros(n)
+    z = R * np.sin(s / R)
+    return np.column_stack([x, y, z])
+
+
+def make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2):
+    """Write a minimal needle param JSON and return its path."""
+    # Use identity calibration matrices so Δλ = kappa directly
+    cal_mats = {}
+    sensor_locs = {}
+    for i in range(1, num_aas + 1):
+        loc = float(i * 20)  # 20 mm, 40 mm, ... from tip
+        sensor_locs[str(i)] = loc
+        # 2 x num_chs identity-like matrix: [κx, κy] = C @ Δλ
+        # Use first two channels: C[:, 0] = [1,0], C[:, 1] = [0,1], rest 0
+        row = np.zeros((2, num_chs))
+        row[0, 0] = 1.0
+        row[1, 1] = 1.0
+        cal_mats[str(loc)] = row.tolist()
+
+    params = {
+        'serial number': 'TEST',
+        'length': 200.0,
+        'diameter': 1.27,
+        'Emod': 200000,
+        'pratio': 0.29,
+        '# channels': num_chs,
+        '# active areas': num_aas,
+        'Sensor Locations': sensor_locs,
+        'Calibration Matrices': cal_mats,
+        'weights': {str(float(i * 20)): 1.0 / num_aas for i in range(1, num_aas + 1)},
+    }
+
+    fpath = str(tmp_path / 'test_needle_params.json')
+    with open(fpath, 'w') as fh:
+        json.dump(params, fh)
+    return fpath
+
+
+# ---------------------------------------------------------------------------
+# Tests: arc-length and tangent computation
+# ---------------------------------------------------------------------------
+
+class TestArcLengths:
+    def test_straight_needle_arc_length(self):
+        """Arc length of a straight needle along z equals its length."""
+        n = 11
+        L = 100.0
+        points = np.column_stack([np.zeros(n), np.zeros(n), np.linspace(0, L, n)])
+        s = compute_arc_lengths(points)
+        assert s[0] == pytest.approx(0.0)
+        assert s[-1] == pytest.approx(L)
+
+    def test_circular_arc_length(self):
+        """Arc length of a circular arc should equal s_max."""
+        kappa = 0.003
+        L = 100.0
+        pts = make_circular_arc(kappa, L=L, n=201)
+        s = compute_arc_lengths(pts)
+        assert s[-1] == pytest.approx(L, rel=1e-3)
+
+
+class TestTangents:
+    def test_straight_tangents_along_z(self):
+        """Tangents of a straight z-axis needle are all [0, 0, 1]."""
+        n = 11
+        L = 100.0
+        points = np.column_stack([
+            np.zeros(n), np.zeros(n), np.linspace(0, L, n)
+        ])
+        s = compute_arc_lengths(points)
+        tangents = compute_tangents(points, s)
+        expected = np.tile([0, 0, 1], (n, 1))
+        np.testing.assert_allclose(tangents, expected, atol=1e-6)
+
+    def test_tangents_unit_norm(self):
+        """All tangent vectors must be unit-normalised."""
+        kappa = 0.003
+        pts = make_circular_arc(kappa, L=100.0, n=51)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        norms = np.linalg.norm(tangents, axis=1)
+        np.testing.assert_allclose(norms, np.ones(len(norms)), atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Tests: parallel-transport frame
+# ---------------------------------------------------------------------------
+
+class TestParallelTransportFrame:
+    def test_frame_orthonormality(self):
+        """Each frame must be orthonormal."""
+        kappa = 0.003
+        pts = make_circular_arc(kappa, L=100.0, n=51)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+
+        for i in range(len(frames)):
+            F = frames[i]  # 3x3 with rows [d1, d2, d3]
+            prod = F @ F.T
+            np.testing.assert_allclose(prod, np.eye(3), atol=1e-8,
+                                       err_msg=f'Frame {i} not orthonormal')
+
+    def test_frame_d3_equals_tangent(self):
+        """Row 2 (d3) of each frame must equal the tangent vector."""
+        kappa = 0.003
+        pts = make_circular_arc(kappa, L=100.0, n=21)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        np.testing.assert_allclose(frames[:, 2, :], tangents, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Tests: curvature computation for a circular arc
+# ---------------------------------------------------------------------------
+
+class TestCurvatureComputation:
+    def test_planar_arc_curvature(self):
+        """A planar arc in x-z has constant curvature magnitude ≈ kappa, κy≈0."""
+        kappa = 0.003
+        L = 100.0
+        pts = make_circular_arc(kappa, L=L, n=101)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+
+        # Curvature magnitude must equal kappa regardless of frame orientation.
+        # (d1 is initialised to the y-axis for a z-directed initial tangent, so
+        #  the x-z bending shows up in ky; checking the magnitude is robust.)
+        kappa_mag = np.sqrt(kx ** 2 + ky ** 2)
+        # Ignore endpoints where boundary effects from the finite-diff / SavGol
+        # filter are largest.
+        interior = slice(5, -5)
+        np.testing.assert_allclose(
+            kappa_mag[interior],
+            np.full(len(kappa_mag[interior]), kappa),
+            rtol=0.05,
+            err_msg='Curvature magnitude should be ~kappa for a circular arc'
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests: wavelength shift inversion
+# ---------------------------------------------------------------------------
+
+class TestWavelengthShiftInversion:
+    """Roundtrip test: shape → Δλ → curvature ≈ expected."""
+
+    def test_roundtrip_with_identity_cal_matrix(self, tmp_path):
+        """With identity calibration, Δλ ≈ [κx, κy, 0] at each sensor."""
+        param_file = make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2)
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, num_aas, _) = load_needle_params_json(param_file)
+
+        kappa = 0.005
+        L = 80.0
+        pts = make_circular_arc(kappa, L=L, n=81)
+        insertion_depth = L
+
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+
+        sensor_locs_from_base = [
+            max(0.0, insertion_depth - loc) for loc in sensor_locs_from_tip
+        ]
+        kappa_at = interpolate_curvature_at_sensors(
+            s, kx, ky, sensor_locs_from_base
+        )
+
+        delta_lambda = curvatures_to_wavelength_shifts(
+            kappa_at, cal_matrices, sensor_locs_from_tip, num_chs
+        )
+
+        # Forward pass: reconstruct curvature from delta_lambda
+        for aa_idx, loc in enumerate(sensor_locs_from_tip):
+            C = cal_matrices[float(loc)]
+            dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
+            kappa_reconstructed = C @ dl
+            np.testing.assert_allclose(
+                kappa_reconstructed, kappa_at[aa_idx],
+                rtol=1e-6,
+                err_msg=f'Roundtrip failed at AA {aa_idx} (loc_from_tip={loc})'
+            )
+
+    def test_roundtrip_with_real_needle_params(self):
+        """Roundtrip with the default 3CH-4AA-0005 needle param file."""
+        if not os.path.isfile(_NEEDLE_DATA):
+            pytest.skip('Needle param file not found; skipping integration test')
+
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, num_aas, _) = load_needle_params_json(_NEEDLE_DATA)
+
+        kappa = 0.003
+        L = 120.0
+        pts = make_circular_arc(kappa, L=L, n=121)
+        insertion_depth = 120.0
+
+        delta_lambda = shape_to_wavelength_shifts(
+            pts, _NEEDLE_DATA, insertion_depth=insertion_depth
+        )
+
+        # Verify roundtrip: C @ Δλ ≈ kappa_expected
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+        sensor_locs_from_base = [
+            max(0.0, insertion_depth - loc) for loc in sensor_locs_from_tip
+        ]
+        kappa_at = interpolate_curvature_at_sensors(
+            s, kx, ky, sensor_locs_from_base
+        )
+
+        for aa_idx, loc in enumerate(sensor_locs_from_tip):
+            C = cal_matrices[float(loc)]
+            dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
+            kappa_reconstructed = C @ dl
+            np.testing.assert_allclose(
+                kappa_reconstructed, kappa_at[aa_idx],
+                rtol=1e-5,
+                atol=1e-12,
+                err_msg=f'Roundtrip failed at sensor loc {loc} mm from tip'
+            )
+
+
+# ---------------------------------------------------------------------------
+# Tests: load_shape_file
+# ---------------------------------------------------------------------------
+
+class TestLoadShapeFile:
+    def test_load_default_yaml(self):
+        """Default YAML shape file must load and have shape (N, 3)."""
+        if not os.path.isfile(_DEFAULT_SHAPE_YAML):
+            pytest.skip('Default shape YAML not found')
+        pts = load_shape_file(_DEFAULT_SHAPE_YAML)
+        assert pts.ndim == 2
+        assert pts.shape[1] == 3
+        assert pts.shape[0] >= 2
+
+    def test_load_json_shape(self, tmp_path):
+        """JSON shape file must load correctly."""
+        data = {'shape': [[0.0, 0.0, 0.0], [1.0, 0.0, 10.0]]}
+        fpath = str(tmp_path / 'shape.json')
+        with open(fpath, 'w') as fh:
+            json.dump(data, fh)
+        pts = load_shape_file(fpath)
+        assert pts.shape == (2, 3)
+        np.testing.assert_allclose(pts[0], [0.0, 0.0, 0.0])
+        np.testing.assert_allclose(pts[1], [1.0, 0.0, 10.0])
+
+
+# ---------------------------------------------------------------------------
+# Tests: load_needle_params_json
+# ---------------------------------------------------------------------------
+
+class TestLoadNeedleParams:
+    def test_load_default_needle(self):
+        """Load the 3CH-4AA-0005 needle param file."""
+        if not os.path.isfile(_NEEDLE_DATA):
+            pytest.skip('Needle param file not found')
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, num_aas, needle_length) = load_needle_params_json(_NEEDLE_DATA)
+        assert num_chs == 3
+        assert num_aas == 4
+        assert len(sensor_locs_from_tip) == num_aas
+        assert needle_length > 0
+        for loc, C in cal_matrices.items():
+            assert C.shape == (2, num_chs), \
+                f'Calibration matrix at {loc} has wrong shape {C.shape}'
