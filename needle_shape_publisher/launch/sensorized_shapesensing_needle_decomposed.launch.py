@@ -29,6 +29,15 @@ def generate_launch_description():
         default_value='false',
         description='Enable manual trigger mode for ShapeSensingNeedle node'
     )
+    arg_shape_type = DeclareLaunchArgument(
+        'shape_type',
+        default_value='-1',
+        description=(
+            'Shape type used by ShapeSensingNeedleNode '
+            '(integer value of needle_shape_sensing.intrinsics.SHAPETYPE; '
+            '-1 means use the value from the needle parameter file).'
+        )
+    )
     ####End Change
 
     # Nodes
@@ -56,6 +65,7 @@ def generate_launch_description():
                 'needle.optimizer.update_orientation_with_airgap': LaunchConfiguration( 'optimNeedleUpdateOrientationAirGap' ),
                 ####Change
                 'needle.manual_mode'                             : LaunchConfiguration('manual_mode'),
+                'needle.shape_type'                              : LaunchConfiguration('shape_type'),
                 ####End Change
                 # Skin-entry insertion point [x, y, z] in mm.
                 # Override on the command line with:
@@ -72,6 +82,7 @@ def generate_launch_description():
     ld.add_action( arg_temp_compensate )
     ld.add_action( arg_optim_update_ornt_airgap )
     ld.add_action( arg_manual_mode )
+    ld.add_action( arg_shape_type )
 
     ld.add_action( node_sensorizedneedle )
     ld.add_action( node_ssneedle )

@@ -66,6 +66,35 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.needlepose_received = False
 
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
+
+        # Declare and apply the shape type parameter.
+        # A value of -1 (the default) means "keep whatever the needle parameter
+        # file loaded"; any non-negative integer is interpreted as a
+        # needle_shape_sensing.intrinsics.SHAPETYPE value.
+        shape_type_int = self.declare_parameter(
+            self.PARAM_NEEDLESHAPE,
+            value=-1,
+            descriptor=ParameterDescriptor(
+                name=self.PARAM_NEEDLESHAPE,
+                type=Parameter.Type.INTEGER.value,
+                description=(
+                    'Shape type for ShapeSensingNeedleNode '
+                    '(integer value of needle_shape_sensing.intrinsics.SHAPETYPE). '
+                    '-1 means use the default from the needle parameter file.'
+                ),
+            ),
+        ).get_parameter_value().integer_value
+        if shape_type_int >= 0:
+            try:
+                self.ss_needle.update_shapetype(NEEDLESHAPETYPE(shape_type_int))
+                self.get_logger().info(f"Shape type set to: {self.ss_needle.current_shapetype}")
+            except ValueError:
+                self.get_logger().warning(
+                    f"Unknown shape_type value {shape_type_int}; keeping default "
+                    f"{self.ss_needle.current_shapetype}."
+                )
+        else:
+            self.get_logger().info(f"Using default shape type: {self.ss_needle.current_shapetype}")
         ####End Change
 
         ####Edit: FIXME: May or may not need the below...not sure

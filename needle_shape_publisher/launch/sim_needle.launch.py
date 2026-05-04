@@ -58,6 +58,15 @@ def generate_launch_description():
         default_value='false',
         description='Enable manual trigger mode for ShapeSensingNeedleNode'
     )
+    arg_shape_type = DeclareLaunchArgument(
+        'shape_type',
+        default_value='-1',
+        description=(
+            'Shape type used by ShapeSensingNeedleNode '
+            '(integer value of needle_shape_sensing.intrinsics.SHAPETYPE; '
+            '-1 means use the value from the needle parameter file).'
+        )
+    )
     # Shape file for sim_level=1 shape-driven simulation
     arg_sim_shape_file = DeclareLaunchArgument(
         'sim_shape_file',
@@ -91,6 +100,7 @@ def generate_launch_description():
             'numSignals': TextSubstitution(text=str(num_signals_to_collect)),
             'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
             'manual_mode': LaunchConfiguration('manual_mode'),
+            'shape_type': LaunchConfiguration('shape_type'),
             # Disable temperature compensation: demo signals have no temperature
             # channel, so enabling it zeros out the processed wavelength shifts.
             'tempCompensate': TextSubstitution(text='False'),
@@ -140,6 +150,7 @@ def generate_launch_description():
     ld.add_action(arg_params)
     ld.add_action(arg_interrIP)
     ld.add_action(arg_manual_mode)
+    ld.add_action(arg_shape_type)
     ld.add_action(arg_sim_shape_file)
     ld.add_action(arg_sim_insertion_depth)
 

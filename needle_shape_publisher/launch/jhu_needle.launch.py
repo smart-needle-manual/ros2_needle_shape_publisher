@@ -54,6 +54,15 @@ def generate_launch_description():
         default_value = 'false',
         description = 'Enable manual trigger mode for ShapeSensingNeedleNode'
     )
+    arg_shape_type = DeclareLaunchArgument(
+        'shape_type',
+        default_value='-1',
+        description=(
+            'Shape type used by ShapeSensingNeedleNode '
+            '(integer value of needle_shape_sensing.intrinsics.SHAPETYPE; '
+            '-1 means use the value from the needle parameter file).'
+        )
+    )
     ####End Change
     
     num_signals_to_collect = 50
@@ -68,6 +77,7 @@ def generate_launch_description():
             'optimNeedleUpdateOrientationAirGap': TextSubstitution(text="False"),
             ####Change
             'manual_mode'                : LaunchConfiguration('manual_mode'),
+            'shape_type'                 : LaunchConfiguration('shape_type'),
             ####End Change
         }.items()
     )
@@ -105,6 +115,7 @@ def generate_launch_description():
     ld.add_action(arg_params)
     ld.add_action(arg_interrIP)
     ld.add_action(arg_manual_mode)
+    ld.add_action(arg_shape_type)
    
     ld.add_action(ld_needlepub)
     ld.add_action(ld_hyperiondemo)
