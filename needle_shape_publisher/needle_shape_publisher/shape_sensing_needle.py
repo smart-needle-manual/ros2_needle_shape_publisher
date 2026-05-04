@@ -5,6 +5,7 @@ import numpy as np
 # ROS2 packages
 import rclpy
 from rclpy import Parameter
+from rclpy.logging import LoggingSeverity
 # messages
 from geometry_msgs.msg import PoseArray, Point, PoseStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -53,6 +54,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
     def __init__( self, name="ShapeSensingNeedle" ):
         super().__init__( name )
         ####Edit: FIXME: Note -- Keep kc_i/winit_i for now, publish add. params if need be
+        self.get_logger().set_level(LoggingSeverity.DEBUG)
         # declare ang get parameters
         self.kc_i     = np.array( [ 0.0005 ] )
         self.w_init_i = np.array( [ self.kc_i[ 0 ], 0.0, 0.0 ] )
