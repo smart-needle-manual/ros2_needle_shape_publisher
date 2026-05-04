@@ -57,6 +57,11 @@ def generate_launch_description():
                 ####Change
                 'needle.manual_mode'                             : LaunchConfiguration('manual_mode'),
                 ####End Change
+                # Skin-entry insertion point [x, y, z] in mm.
+                # Override on the command line with:
+                #   ros2 param set /needle/shapesensing_needle \
+                #       needle.initial_insertion_point [x,y,z]
+                'needle.initial_insertion_point'                 : [ 0.0, 0.0, 0.0 ],
             }],
         )
 
