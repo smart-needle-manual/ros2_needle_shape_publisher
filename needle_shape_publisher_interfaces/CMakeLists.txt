@@ -19,6 +19,7 @@ include_directories(
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GetPoseFromPoseArray.srv"
   "srv/GetPoseArray.srv"
+  "srv/UpdateShapeType.srv"
   DEPENDENCIES 
     builtin_interfaces
     geometry_msgs

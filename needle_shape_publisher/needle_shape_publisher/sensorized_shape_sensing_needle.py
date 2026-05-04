@@ -30,7 +30,7 @@ class NeedleNode(Node):
     PARAM_AAS = ".".join( [ PARAM_NEEDLE, "activeAreas" ] )  # needle number of active areas
     PARAM_AAWEIGHTS = ".".join( [ PARAM_AAS, "weights" ] )  # needle AA reliability weightings
     PARAM_SLOCS = ".".join( [ PARAM_AAS, 'locations' ] )  # needle AA locations from tip of the needle
-    PARAM_NEEDLESHAPE = ".".join( (PARAM_NEEDLE, "shape_type") )  # unused, needle shape type
+    PARAM_NEEDLESHAPE = ".".join( (PARAM_NEEDLE, "shape_type") )  # needle shape type
 
     def __init__(self, name='Needle'):
         super().__init__(name)
@@ -123,7 +123,7 @@ class SensorizedShapeSensingNeedleNode( Node ):
     PARAM_AAS = ".".join( [ PARAM_NEEDLE, "activeAreas" ] )  # needle number of active areas
     PARAM_AAWEIGHTS = ".".join( [ PARAM_AAS, "weights" ] )  # needle AA reliability weightings
     PARAM_SLOCS = ".".join( [ PARAM_AAS, 'locations' ] )  # needle AA locations from tip of the needle
-    PARAM_NEEDLESHAPE = ".".join( (PARAM_NEEDLE, "shape_type") )  # unused, needle shape type
+    PARAM_NEEDLESHAPE = ".".join( (PARAM_NEEDLE, "shape_type") )  # needle shape type
 
     # - FBG signal parameters
     PARAM_NUMSIGNALS = ".".join( [ PARAM_NEEDLE, "sensor.numberSignals" ] )  # number of signals to gather for sampling
