@@ -91,6 +91,9 @@ def generate_launch_description():
             'numSignals': TextSubstitution(text=str(num_signals_to_collect)),
             'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
             'manual_mode': LaunchConfiguration('manual_mode'),
+            # Disable temperature compensation: demo signals have no temperature
+            # channel, so enabling it zeros out the processed wavelength shifts.
+            'tempCompensate': TextSubstitution(text='False'),
         }.items()
     )
 

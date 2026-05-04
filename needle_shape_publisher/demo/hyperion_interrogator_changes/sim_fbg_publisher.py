@@ -226,10 +226,19 @@ def shape_to_wavelength_shifts(
         kappa[i, 1] = float(np.interp(sc, arc, ky))
 
     # Inverse calibration: Δλ = pinv(C) @ [κx, κy]
+    # Use nearest-key lookup so that minor floating-point differences between
+    # the JSON-loaded cal_matrices keys and sensor_location_tip values do not
+    # raise a KeyError.
+    _cal_keys = np.array(sorted(cal_matrices.keys()), dtype=float)
+
+    def _nearest_cal(loc: float) -> np.ndarray:
+        idx = np.argmin(np.abs(_cal_keys - loc))
+        return cal_matrices[_cal_keys[idx]]
+
     num_aas = len(sensor_locs_from_tip)
     delta_lambda = {ch: np.zeros(num_aas) for ch in range(1, num_chs + 1)}
     for aa_idx, loc in enumerate(sensor_locs_from_tip):
-        C = cal_matrices[float(loc)]       # (2, num_chs)
+        C = _nearest_cal(float(loc))       # (2, num_chs)
         dl = np.linalg.pinv(C) @ kappa[aa_idx]   # (num_chs,)
         for ci in range(num_chs):
             delta_lambda[ci + 1][aa_idx] = float(dl[ci])
