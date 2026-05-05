@@ -67,6 +67,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         self.entrypoint_received = False
         self.needlepose_received = False
+        self.curvatures_received = False
 
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
 
@@ -352,10 +353,18 @@ class ShapeSensingNeedleNode( NeedleNode ):
         """ Publish the 3D needle shape"""
         ####Change
         if self.manual_mode:
-            if not (self.entrypoint_received and self.needlepose_received):
-                self.get_logger().debug("Manual mode active --- waiting for entry point and needle pose data")
+            if not (self.entrypoint_received and self.needlepose_received and self.curvatures_received):
+                self.get_logger().debug(
+                    "Manual mode active --- waiting for entry point, needle pose, and curvature data"
+                )
                 return
             self.get_logger().debug("Manual data received - computing shape...")
+        else:
+            if not (self.needlepose_received and self.curvatures_received):
+                self.get_logger().debug(
+                    "Waiting for needle pose and curvature data before publishing shape"
+                )
+                return
         ####End Change
         
         ####Change
@@ -450,6 +459,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # update the curvatures
         self.ss_needle.current_curvatures = curvatures
+        self.curvatures_received = True
 
         if not self.ss_needle.is_calibrated:
             self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
