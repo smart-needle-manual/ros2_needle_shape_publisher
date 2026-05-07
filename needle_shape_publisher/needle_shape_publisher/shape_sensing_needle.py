@@ -381,10 +381,17 @@ class ShapeSensingNeedleNode( NeedleNode ):
         #pmat, Rmat = self.get_needleshape()
         ####End Change
 
-        ####Edit: FIXME: This may be a source of breakage
-        # update initial kappa_c values
-        self.kc_i     = self.ss_needle.current_kc
-        self.w_init_i = self.ss_needle.current_winit
+        # Determine whether the current shape type uses kappa_c / w_init.
+        # For PIECEWISE_EXP, current_kc may be a scalar (not iterable) and
+        # kc/winit are not used, so skip the cache update to avoid
+        # overwriting the cached arrays with an incompatible value.
+        is_piecewise_exp = (
+            (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP)
+            == NEEDLESHAPETYPE.PIECEWISE_EXP
+        )
+        if not is_piecewise_exp:
+            self.kc_i     = self.ss_needle.current_kc
+            self.w_init_i = self.ss_needle.current_winit
 
         # check to make sure messages are not None
 
@@ -406,12 +413,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
         msg_shape = utilities.poses2msg( pmat, Rmat, header=header )
 
-        ####Edit: FIXME: Eventually will not need the kc and winit messages below
-
-        
-        # generate kappa_c and w_init message
-        msg_kc    = Float64MultiArray( data=self.kc_i )
-        msg_winit = Float64MultiArray( data=self.w_init_i.tolist() )
         msg_depth = Float64(data=float(self.insertion_depth))
 
         self.get_logger().debug( f"Needle Shapes: {pmat.shape}, {Rmat.shape}, {len( msg_shape.poses )}" )
@@ -425,13 +426,24 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####Change
         self.get_logger().debug(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
         ####End Change
-        self.pub_kc.publish( msg_kc )
-        self.pub_winit.publish( msg_winit )
         self.pub_depth.publish( msg_depth )
-        self.get_logger().debug(
-            "Published needle shape, kappa_c and w_init on topics: "
-            f"{self.pub_shape.topic},{self.pub_kc.topic},{self.pub_winit.topic}"
-        )
+
+        # kappa_c and w_init are not applicable for PIECEWISE_EXP; skip those
+        # topics to avoid a TypeError when current_kc is a scalar.
+        if is_piecewise_exp:
+            self.get_logger().debug(
+                "PIECEWISE_EXP shape type: skipping state/kappac and state/winit publish "
+                "(kappa_c and w_init are not applicable for this shape type)."
+            )
+        else:
+            msg_kc    = Float64MultiArray( data=self.kc_i )
+            msg_winit = Float64MultiArray( data=self.w_init_i.tolist() )
+            self.pub_kc.publish( msg_kc )
+            self.pub_winit.publish( msg_winit )
+            self.get_logger().debug(
+                "Published needle shape, kappa_c and w_init on topics: "
+                f"{self.pub_shape.topic},{self.pub_kc.topic},{self.pub_winit.topic}"
+            )
 
         ####Change
         if self.manual_mode:
