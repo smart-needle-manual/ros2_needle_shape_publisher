@@ -31,6 +31,7 @@ setup(
                 'shapesensing_needle = needle_shape_publisher.shape_sensing_needle:main',
                 'shapesensing_benchmarker = needle_shape_publisher.benchmark:main',
                 'shape_plotter = needle_shape_publisher.shape_plotter:main',
+                'topic_repeater = needle_shape_publisher.topic_repeater:main',
         ],
     },
 )
