@@ -122,6 +122,8 @@ def generate_launch_description():
     ld.add_action(ld_hyperionstream)
 
     # Continuously publish helper topics required by ShapeSensingNeedleNode.
+    # Use z=100 mm to provide a stable non-zero insertion depth in helper mode
+    # (matching the simulation helper default depth convention).
     needle_pose_pub = ExecuteProcess(
         cmd=[
             'ros2', 'topic', 'pub', '--rate', '10',
