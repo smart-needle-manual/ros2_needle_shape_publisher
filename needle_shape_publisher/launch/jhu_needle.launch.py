@@ -5,9 +5,10 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription, actions, conditions
 from launch.substitutions.launch_configuration import LaunchConfiguration
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, ExecuteProcess
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.substitutions import PythonExpression, LocalSubstitution, TextSubstitution, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 
 pkg_hyperion_interrogator  = get_package_share_directory('hyperion_interrogator')
 pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher')
@@ -126,25 +127,35 @@ def generate_launch_description():
     # Continuously publish helper topics required by ShapeSensingNeedleNode.
     # Use z=100 mm to provide a stable non-zero insertion depth in helper mode
     # (matching the simulation helper default depth convention).
-    needle_pose_pub = ExecuteProcess(
-        cmd=[
-            'ros2', 'topic', 'pub', '--rate', helper_pub_rate_hz,
-            '/stage/state/needle_pose',
-            'geometry_msgs/msg/PoseStamped',
-            '{"header": {"frame_id": "needle"}, '
-            f'"pose": {{"position": {{"x": 0.0, "y": 0.0, "z": {default_insertion_depth_mm}}}, '
-            '"orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
-        ],
+    # Publishing to either topic while the launch is running will update the
+    # value that is continuously re-broadcast (last-value-wins semantics).
+    needle_pose_pub = Node(
+        package='needle_shape_publisher',
+        executable='topic_repeater',
+        name='needle_pose_repeater',
+        parameters=[{
+            'topic': '/stage/state/needle_pose',
+            'msg_type': 'geometry_msgs/msg/PoseStamped',
+            'rate_hz': float(helper_pub_rate_hz),
+            'default_msg': (
+                '{"header": {"frame_id": "needle"}, '
+                f'"pose": {{"position": {{"x": 0.0, "y": 0.0, "z": {default_insertion_depth_mm}}}, '
+                '"orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}'
+            ),
+        }],
         output='screen',
     )
 
-    skin_entry_pub = ExecuteProcess(
-        cmd=[
-            'ros2', 'topic', 'pub', '--rate', helper_pub_rate_hz,
-            '/needle/state/skin_entry',
-            'geometry_msgs/msg/Point',
-            '{"x": 0.0, "y": 0.0, "z": 0.0}',
-        ],
+    skin_entry_pub = Node(
+        package='needle_shape_publisher',
+        executable='topic_repeater',
+        name='skin_entry_repeater',
+        parameters=[{
+            'topic': '/needle/state/skin_entry',
+            'msg_type': 'geometry_msgs/msg/Point',
+            'rate_hz': float(helper_pub_rate_hz),
+            'default_msg': '{"x": 0.0, "y": 0.0, "z": 0.0}',
+        }],
         output='screen',
     )
 
