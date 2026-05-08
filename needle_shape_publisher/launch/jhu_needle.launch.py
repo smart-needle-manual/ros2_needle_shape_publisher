@@ -23,6 +23,8 @@ def determineCHsAAs(needleParamFile: str):
 
 def generate_launch_description():
     ld = LaunchDescription()
+    helper_pub_rate_hz = '10'
+    default_insertion_depth_mm = 100.0
 
     # Set numChs and numAAs
     numCHs, numAAs = 3, 4
@@ -126,11 +128,11 @@ def generate_launch_description():
     # (matching the simulation helper default depth convention).
     needle_pose_pub = ExecuteProcess(
         cmd=[
-            'ros2', 'topic', 'pub', '--rate', '10',
+            'ros2', 'topic', 'pub', '--rate', helper_pub_rate_hz,
             '/stage/state/needle_pose',
             'geometry_msgs/msg/PoseStamped',
             '{"header": {"frame_id": "needle"}, '
-            '"pose": {"position": {"x": 0.0, "y": 0.0, "z": 100.0}, '
+            f'"pose": {{"position": {{"x": 0.0, "y": 0.0, "z": {default_insertion_depth_mm}}}, '
             '"orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
         ],
         output='screen',
@@ -138,7 +140,7 @@ def generate_launch_description():
 
     skin_entry_pub = ExecuteProcess(
         cmd=[
-            'ros2', 'topic', 'pub', '--rate', '10',
+            'ros2', 'topic', 'pub', '--rate', helper_pub_rate_hz,
             '/needle/state/skin_entry',
             'geometry_msgs/msg/Point',
             '{"x": 0.0, "y": 0.0, "z": 0.0}',
