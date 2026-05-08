@@ -5,7 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription, actions, conditions
 from launch.substitutions.launch_configuration import LaunchConfiguration
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import PythonExpression, LocalSubstitution, TextSubstitution, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
@@ -63,6 +63,11 @@ def generate_launch_description():
             '-1 means use the value from the needle parameter file).'
         )
     )
+    arg_sim_insertion_depth = DeclareLaunchArgument(
+        'sim_insertion_depth',
+        default_value='100.0',
+        description='Insertion depth (mm) used for helper /stage/state/needle_pose publisher'
+    )
     ####End Change
     
     num_signals_to_collect = 50
@@ -116,9 +121,39 @@ def generate_launch_description():
     ld.add_action(arg_interrIP)
     ld.add_action(arg_manual_mode)
     ld.add_action(arg_shape_type)
+    ld.add_action(arg_sim_insertion_depth)
    
     ld.add_action(ld_needlepub)
     ld.add_action(ld_hyperiondemo)
-    ld.add_action(ld_hyperionstream)    
+    ld.add_action(ld_hyperionstream)
+
+    # Continuously publish helper topics required by ShapeSensingNeedleNode.
+    needle_pose_pub = ExecuteProcess(
+        cmd=[
+            'ros2', 'topic', 'pub', '--rate', '10',
+            '/stage/state/needle_pose',
+            'geometry_msgs/msg/PoseStamped',
+            [
+                '{"header": {"frame_id": "needle"}, '
+                '"pose": {"position": {"x": 0.0, "y": 0.0, "z": ',
+                LaunchConfiguration('sim_insertion_depth'),
+                '}, "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
+            ],
+        ],
+        output='screen',
+    )
+
+    skin_entry_pub = ExecuteProcess(
+        cmd=[
+            'ros2', 'topic', 'pub', '--rate', '10',
+            '/needle/state/skin_entry',
+            'geometry_msgs/msg/Point',
+            '{"x": 0.0, "y": 0.0, "z": 0.0}',
+        ],
+        output='screen',
+    )
+
+    ld.add_action(needle_pose_pub)
+    ld.add_action(skin_entry_pub)
 
     return ld
