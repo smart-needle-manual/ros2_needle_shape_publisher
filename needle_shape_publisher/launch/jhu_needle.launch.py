@@ -63,11 +63,6 @@ def generate_launch_description():
             '-1 means use the value from the needle parameter file).'
         )
     )
-    arg_sim_insertion_depth = DeclareLaunchArgument(
-        'sim_insertion_depth',
-        default_value='100.0',
-        description='Insertion depth (mm) used for helper /stage/state/needle_pose publisher'
-    )
     ####End Change
     
     num_signals_to_collect = 50
@@ -121,7 +116,6 @@ def generate_launch_description():
     ld.add_action(arg_interrIP)
     ld.add_action(arg_manual_mode)
     ld.add_action(arg_shape_type)
-    ld.add_action(arg_sim_insertion_depth)
    
     ld.add_action(ld_needlepub)
     ld.add_action(ld_hyperiondemo)
@@ -133,12 +127,9 @@ def generate_launch_description():
             'ros2', 'topic', 'pub', '--rate', '10',
             '/stage/state/needle_pose',
             'geometry_msgs/msg/PoseStamped',
-            [
-                '{"header": {"frame_id": "needle"}, '
-                '"pose": {"position": {"x": 0.0, "y": 0.0, "z": ',
-                LaunchConfiguration('sim_insertion_depth'),
-                '}, "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
-            ],
+            '{"header": {"frame_id": "needle"}, '
+            '"pose": {"position": {"x": 0.0, "y": 0.0, "z": 100.0}, '
+            '"orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
         ],
         output='screen',
     )
