@@ -230,7 +230,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     @property
     def needle_guide_exit_pt(self):
-        return stage_pose_translation( self.current_needle_pose[0] )
+        return stage_pose_translation(self.current_needle_pose[0])
 
     # needle_guide_exit_pt
 
