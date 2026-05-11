@@ -9,16 +9,29 @@ shape polyline.  The pipeline is:
                               differences when scipy is unavailable)
     → rotation-minimising parallel-transport frame
     → curvature components (κx, κy) in the material frame
+    → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = κx
     → interpolation at each active-area (AA) sensor location
-    → inverse calibration matrix:  Δλ_k = pinv(C_k) @ [κx_k, κy_k]
+    → inverse calibration matrix:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
 
 The inverse calibration step mirrors the forward mapping used by the
 needle-shape-publisher pipeline:
-    [κx_k, κy_k] = C_k @ [Δλ_CH1_k, Δλ_CH2_k, …]
+    [ω[0]_k, ω[1]_k] = C_k @ [Δλ_CH1_k, Δλ_CH2_k, …]
 
-The output ``delta_lambda`` dict contains one entry per FBG channel with an
-array of Δλ values (one per AA), formatted so it can be published directly on
-the ``sensor/processed`` topic as a ``Float64MultiArray`` message.
+where ω[0] and ω[1] are the two bending components of the body-frame angular
+velocity (= what ``current_curvatures[0, aa]`` and ``current_curvatures[1, aa]``
+store after the FBG processing pipeline).
+
+Body-frame convention
+---------------------
+For rotation matrix R whose columns are [e1, e2, e3 = tangent]:
+
+    dR/ds = R · skew(ω)   →   dT/ds = ω[1]·e1 − ω[0]·e2
+
+Projecting:
+    κx = (dT/ds)·e1 =  ω[1]   →   ω[1] = +κx
+    κy = (dT/ds)·e2 = −ω[0]   →   ω[0] = −κy
+
+This mapping is applied inside ``interpolate_curvature_at_sensors``.
 
 References
 ----------
@@ -305,7 +318,11 @@ def compute_curvature_components(
 ):
     """Compute material-frame curvature components (κx, κy) along the curve.
 
-    κx = (dt/ds) · d1,   κy = (dt/ds) · d2
+    κx = (dT/ds) · d1,   κy = (dT/ds) · d2
+
+    These are Frenet-frame projections.  To obtain body-frame angular-velocity
+    components for use with the piecewise-exp reconstructor, apply the mapping
+    ω[0] = −κy,  ω[1] = +κx  (see ``interpolate_curvature_at_sensors``).
 
     Parameters
     ----------
@@ -330,26 +347,43 @@ def interpolate_curvature_at_sensors(
     ky: np.ndarray,
     sensor_locs_from_base,
 ) -> np.ndarray:
-    """Interpolate curvature at the arc-length positions of the sensors.
+    """Interpolate body-frame angular velocity at sensor arc-length positions.
+
+    The Frenet components (κx, κy) are mapped to body-frame angular-velocity
+    slots before returning so that the output can be fed directly to
+    ``curvatures_to_wavelength_shifts`` and, after inversion, will be recovered
+    identically by the downstream calibration step as ``current_curvatures``::
+
+        ω[0] = −(dT/ds)·d2 = −κy   →  kappa[:, 0]
+        ω[1] = +(dT/ds)·d1 = +κx   →  kappa[:, 1]
+
+    This matches the convention of the piecewise-exp cost function, which
+    compares ``wv[:, 0:2]`` (body angular velocity) against
+    ``current_curvatures[0:2, aa]``.
 
     Parameters
     ----------
     arc_lengths : (N,) ndarray
-    kx, ky : (N,) ndarray
+    kx, ky : (N,) ndarray  Frenet curvature projections onto d1 and d2
     sensor_locs_from_base : sequence of float
-        Arc-length position of each sensor measured from the needle base (mm).
+        Arc-length position of each sensor measured from the needle base (mm),
+        or from the tissue entry point when the shape polyline starts there.
         Sensors outside the polyline range are clamped to the nearest endpoint.
 
     Returns
     -------
-    kappa : (num_aas, 2) ndarray  – columns are [κx, κy]
+    kappa : (num_aas, 2) ndarray
+        Columns are ``[ω[0], ω[1]]`` = ``[−κy, +κx]``.
     """
     kappa = np.zeros((len(sensor_locs_from_base), 2))
     s_min, s_max = arc_lengths[0], arc_lengths[-1]
     for i, s in enumerate(sensor_locs_from_base):
         s_clamped = float(np.clip(s, s_min, s_max))
-        kappa[i, 0] = float(np.interp(s_clamped, arc_lengths, kx))
-        kappa[i, 1] = float(np.interp(s_clamped, arc_lengths, ky))
+        # Map Frenet projections to body-frame angular-velocity slots:
+        #   ω[0] = −κy  (rotates around e1; drives y-z coupling for e2-directed bend)
+        #   ω[1] = +κx  (rotates around e2; drives x-z coupling for e1-directed bend)
+        kappa[i, 0] = float(-np.interp(s_clamped, arc_lengths, ky))
+        kappa[i, 1] = float(np.interp(s_clamped, arc_lengths, kx))
     return kappa
 
 
@@ -359,14 +393,18 @@ def curvatures_to_wavelength_shifts(
     sensor_locs_from_tip,
     num_chs: int,
 ) -> dict:
-    """Convert per-sensor curvatures to FBG wavelength shifts via pseudo-inverse.
+    """Convert per-sensor body-frame curvatures to FBG wavelength shifts.
 
-    The forward model is  [κx, κy] = C @ [Δλ_1, …, Δλ_num_chs]  (C is 2×num_chs).
-    The inverse is        [Δλ_1, …, Δλ_num_chs] = pinv(C) @ [κx, κy].
+    The forward model is  [ω[0], ω[1]] = C @ [Δλ_1, …, Δλ_num_chs]  (C is 2×num_chs).
+    The inverse is        [Δλ_1, …, Δλ_num_chs] = pinv(C) @ [ω[0], ω[1]].
+
+    ``kappa_at_sensors`` must use the body-frame convention
+    ``[−κy, +κx]`` (as returned by ``interpolate_curvature_at_sensors``).
 
     Parameters
     ----------
     kappa_at_sensors : (num_aas, 2) ndarray
+        Body-frame angular-velocity components ``[ω[0], ω[1]]`` at each AA.
     cal_matrices : dict
         ``{float(loc_from_tip): ndarray (2, num_chs)}``
     sensor_locs_from_tip : sequence of float  (same order as kappa_at_sensors rows)

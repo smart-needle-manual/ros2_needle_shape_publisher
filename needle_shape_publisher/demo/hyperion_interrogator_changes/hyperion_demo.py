@@ -132,15 +132,22 @@ class HyperionDemo( HyperionPublisher ):
     # _load_sim_shape
 
     def _get_cal_matrices_from_needle( self ):
-        """Return calibration matrices from the loaded FBG-needle object.
+        """Return calibration matrices keyed by sensor location **from the tip**.
 
-        Falls back to ``None`` if the needle was not loaded.  The returned
-        dict maps ``float(location_mm_from_tip)`` → ``np.ndarray (2, num_chs)``.
+        ``fbgneedle.cal_matrices`` is keyed by sensor location from the needle
+        BASE (as stored in the JSON ``Calibration Matrices`` field).
+        ``shape_to_wavelength_shifts`` and ``sensor_location_tip`` both use the
+        from-tip convention, so we invert the key here:
+
+            loc_from_tip = needle_length − loc_from_base
+
+        Falls back to ``None`` if the needle was not loaded.
         """
         if self.fbgneedle is None:
             return None
         try:
-            return { float( k ): np.asarray( v, dtype=float )
+            L = float( self.fbgneedle.length )
+            return { L - float( k ): np.asarray( v, dtype=float )
                      for k, v in self.fbgneedle.cal_matrices.items() }
         except AttributeError:
             return None

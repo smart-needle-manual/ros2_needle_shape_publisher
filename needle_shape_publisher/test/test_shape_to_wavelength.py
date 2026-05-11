@@ -48,6 +48,7 @@ def make_circular_arc(kappa, L=100.0, n=51):
     """Generate a planar circular arc in the x-z plane.
 
     Returns (N,3) array of points, one-dimensional curvature = kappa (rad/mm).
+    The arc starts at the origin pointing along +z and curves toward +x.
     """
     R = 1.0 / kappa
     s = np.linspace(0, L, n)
@@ -57,15 +58,32 @@ def make_circular_arc(kappa, L=100.0, n=51):
     return np.column_stack([x, y, z])
 
 
+def make_yz_circular_arc(kappa, L=100.0, n=51):
+    """Generate a planar circular arc in the y-z plane curving toward -y.
+
+    Returns (N,3) array of points, one-dimensional curvature = kappa (rad/mm).
+    The arc starts at the origin pointing along +z and curves toward -y.
+    """
+    R = 1.0 / kappa
+    s = np.linspace(0, L, n)
+    x = np.zeros(n)
+    y = -R * (1.0 - np.cos(s / R))
+    z = R * np.sin(s / R)
+    return np.column_stack([x, y, z])
+
+
 def make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2):
-    """Write a minimal needle param JSON and return its path."""
-    # Use identity calibration matrices so Δλ = kappa directly
+    """Write a minimal needle param JSON and return its path.
+
+    Sensor locations are stored as mm from the needle TIP (matching the
+    convention expected by ``load_needle_params_json``).
+    """
     cal_mats = {}
     sensor_locs = {}
     for i in range(1, num_aas + 1):
         loc = float(i * 20)  # 20 mm, 40 mm, ... from tip
         sensor_locs[str(i)] = loc
-        # 2 x num_chs identity-like matrix: [κx, κy] = C @ Δλ
+        # 2 x num_chs identity-like matrix: [ω[0], ω[1]] = C @ Δλ
         # Use first two channels: C[:, 0] = [1,0], C[:, 1] = [0,1], rest 0
         row = np.zeros((2, num_chs))
         row[0, 0] = 1.0
@@ -197,6 +215,128 @@ class TestCurvatureComputation:
 
 
 # ---------------------------------------------------------------------------
+# Tests: body-frame convention (kx, ky) → (ω[0], ω[1]) = (−κy, +κx)
+# ---------------------------------------------------------------------------
+
+class TestBodyFrameConvention:
+    """Verify that interpolate_curvature_at_sensors maps (kx, ky) to (−ky, kx).
+
+    Body-frame derivation:
+        dR/ds = R · skew(ω)  →  dT/ds = ω[1]·e1 − ω[0]·e2
+        projecting: kx = (dT/ds)·e1 = ω[1],  ky = (dT/ds)·e2 = −ω[0]
+        ⟹  ω[0] = −ky,   ω[1] = +kx
+    """
+
+    def test_xz_arc_omega_slots(self):
+        """X-Z plane arc (bends toward +x): kx≈kappa, ky≈0.
+
+        After the body-frame mapping:
+            kappa_at[:, 0] = ω[0] = −ky ≈  0
+            kappa_at[:, 1] = ω[1] = +kx ≈ kappa
+        """
+        kappa_val = 0.003
+        L = 100.0
+        pts = make_circular_arc(kappa_val, L=L, n=101)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+
+        # Sensor at mid-arc where boundary effects are minimal
+        s_mid = [L / 2.0]
+        kappa_at = interpolate_curvature_at_sensors(s, kx, ky, s_mid)
+
+        tol = kappa_val * 0.10  # 10 % relative tolerance
+        np.testing.assert_allclose(
+            kappa_at[0, 0], 0.0, atol=tol,
+            err_msg='ω[0] should be ≈0 for an x-z plane arc (ky≈0 → −ky≈0)'
+        )
+        np.testing.assert_allclose(
+            kappa_at[0, 1], kappa_val, rtol=0.10,
+            err_msg='ω[1] should be ≈kappa for an x-z plane arc (kx≈kappa)'
+        )
+
+    def test_yz_arc_omega_slots(self):
+        """Y-Z plane arc (bends toward −y): kx≈0, ky≈−kappa (ky<0 because n·d2<0).
+
+        After the body-frame mapping:
+            kappa_at[:, 0] = ω[0] = −ky ≈ +kappa
+            kappa_at[:, 1] = ω[1] = +kx ≈  0
+        """
+        kappa_val = 0.003
+        L = 100.0
+        pts = make_yz_circular_arc(kappa_val, L=L, n=101)
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+
+        s_mid = [L / 2.0]
+        kappa_at = interpolate_curvature_at_sensors(s, kx, ky, s_mid)
+
+        tol = kappa_val * 0.10
+        np.testing.assert_allclose(
+            kappa_at[0, 0], kappa_val, rtol=0.10,
+            err_msg='ω[0] should be ≈kappa for a y-z plane arc (ky≈−kappa → −ky≈+kappa)'
+        )
+        np.testing.assert_allclose(
+            kappa_at[0, 1], 0.0, atol=tol,
+            err_msg='ω[1] should be ≈0 for a y-z plane arc (kx≈0)'
+        )
+
+    def test_piecewise_exp_reconstruction_xz_arc(self, tmp_path):
+        """Roundtrip: x-z arc → Δλ → C @ Δλ gives ω = [0, kappa], not [kappa, 0]."""
+        param_file = make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2)
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, num_aas, _) = load_needle_params_json(param_file)
+
+        kappa = 0.005
+        L = 80.0
+        pts = make_circular_arc(kappa, L=L, n=81)
+        insertion_depth = L
+
+        delta_lambda = shape_to_wavelength_shifts(
+            pts, param_file, insertion_depth=insertion_depth
+        )
+
+        sensor_locs_from_base = [
+            max(0.0, insertion_depth - loc) for loc in sensor_locs_from_tip
+        ]
+
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx_arr, ky_arr = compute_curvature_components(s, tangents, frames)
+        kappa_at = interpolate_curvature_at_sensors(
+            s, kx_arr, ky_arr, sensor_locs_from_base
+        )
+
+        for aa_idx, loc in enumerate(sensor_locs_from_tip):
+            C = cal_matrices[float(loc)]
+            dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
+            omega_reconstructed = C @ dl  # should equal [ω[0], ω[1]] = [−ky, kx]
+
+            np.testing.assert_allclose(
+                omega_reconstructed, kappa_at[aa_idx],
+                rtol=1e-6,
+                err_msg=(
+                    f'Roundtrip failed at AA {aa_idx}: '
+                    f'expected ω={kappa_at[aa_idx]}, got {omega_reconstructed}'
+                )
+            )
+
+            # For x-z arc, slot 0 (ω[0]) should be ≈0 and slot 1 (ω[1]) ≈ kappa
+            np.testing.assert_allclose(
+                omega_reconstructed[0], 0.0, atol=kappa * 0.12,
+                err_msg='ω[0] should be ≈0 for x-z arc (not kappa!)'
+            )
+            np.testing.assert_allclose(
+                omega_reconstructed[1], kappa, rtol=0.12,
+                err_msg='ω[1] should be ≈kappa for x-z arc'
+            )
+
+
+# ---------------------------------------------------------------------------
 # Tests: wavelength shift inversion
 # ---------------------------------------------------------------------------
 
@@ -204,7 +344,7 @@ class TestWavelengthShiftInversion:
     """Roundtrip test: shape → Δλ → curvature ≈ expected."""
 
     def test_roundtrip_with_identity_cal_matrix(self, tmp_path):
-        """With identity calibration, Δλ ≈ [κx, κy, 0] at each sensor."""
+        """With identity calibration, C @ Δλ ≈ kappa_at at each sensor."""
         param_file = make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2)
         (cal_matrices, sensor_locs_from_tip,
          num_chs, num_aas, _) = load_needle_params_json(param_file)
@@ -258,7 +398,7 @@ class TestWavelengthShiftInversion:
             pts, _NEEDLE_DATA, insertion_depth=insertion_depth
         )
 
-        # Verify roundtrip: C @ Δλ ≈ kappa_expected
+        # Verify roundtrip: C @ Δλ ≈ kappa_expected (body-frame)
         s = compute_arc_lengths(pts)
         tangents = compute_tangents(pts, s)
         frames = build_parallel_transport_frame(tangents)

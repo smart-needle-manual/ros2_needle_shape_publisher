@@ -14,8 +14,22 @@ shape polyline  (Nx3, mm)
   → unit tangents  (Savitzky-Golay local-quadratic or central differences)
   → rotation-minimising parallel-transport frame
   → curvature components (κx, κy) in the material frame
+  → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = +κx
   → interpolation at each active-area (AA) sensor location
-  → inverse calibration:  Δλ_k = pinv(C_k) @ [κx_k, κy_k]
+  → inverse calibration:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
+
+Body-frame convention
+---------------------
+For rotation matrix R with columns [e1, e2, e3=tangent]:
+
+    dR/ds = R · skew(ω)   →   dT/ds = ω[1]·e1 − ω[0]·e2
+
+Projecting:
+    κx = (dT/ds)·e1 = +ω[1]   →   ω[1] = +κx
+    κy = (dT/ds)·e2 = −ω[0]   →   ω[0] = −κy
+
+This is the convention stored in ``current_curvatures[0:2, aa]`` after the
+normal FBG processing pipeline.
 
 References
 ----------
@@ -187,7 +201,9 @@ def shape_to_wavelength_shifts(
         Shape polyline in mm, from entry point (index 0) to needle tip.
     cal_matrices : dict
         ``{float(location_mm_from_tip): ndarray (2, num_chs)}`` – calibration
-        matrices as found in the FBGNeedle object (``fbgneedle.cal_matrices``).
+        matrices keyed by sensor location **from the tip** (mm).
+        See ``HyperionDemo._get_cal_matrices_from_needle`` for how to obtain
+        this from ``fbgneedle.cal_matrices`` (which is keyed from the base).
     sensor_locs_from_tip : list of float
         Active-area locations from the needle tip (mm), in AA index order.
     num_chs : int
@@ -217,18 +233,19 @@ def shape_to_wavelength_shifts(
     kx = np.einsum('ni,ni->n', dtds, frames[:, 0])
     ky = np.einsum('ni,ni->n', dtds, frames[:, 1])
 
-    # Interpolate at sensor locations
+    # Interpolate at sensor locations and map to body-frame angular velocity:
+    #   ω[0] = −(dT/ds)·d2 = −κy   (slot 0 of current_curvatures)
+    #   ω[1] = +(dT/ds)·d1 = +κx   (slot 1 of current_curvatures)
     s_min, s_max = arc[0], arc[-1]
     kappa = np.zeros((len(sensor_locs_from_tip), 2))
     for i, s in enumerate(sensor_s):
         sc = float(np.clip(s, s_min, s_max))
-        kappa[i, 0] = float(np.interp(sc, arc, kx))
-        kappa[i, 1] = float(np.interp(sc, arc, ky))
+        kappa[i, 0] = -float(np.interp(sc, arc, ky))
+        kappa[i, 1] = float(np.interp(sc, arc, kx))
 
-    # Inverse calibration: Δλ = pinv(C) @ [κx, κy]
+    # Inverse calibration: Δλ = pinv(C) @ [ω[0], ω[1]]
     # Use nearest-key lookup so that minor floating-point differences between
-    # the JSON-loaded cal_matrices keys and sensor_location_tip values do not
-    # raise a KeyError.
+    # cal_matrices keys and sensor_location_tip values do not raise a KeyError.
     _cal_keys = np.array(sorted(cal_matrices.keys()), dtype=float)
 
     def _nearest_cal(loc: float) -> np.ndarray:
