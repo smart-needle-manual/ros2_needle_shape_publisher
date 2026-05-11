@@ -230,7 +230,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     @property
     def needle_guide_exit_pt(self):
-        return stage_pose_translation( self.current_needle_pose[ 0 ] )
+        return stage_pose_translation( self.current_needle_pose[0] )
 
     # needle_guide_exit_pt
 
@@ -438,7 +438,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # model can use it as the air-gap / entry depth along the insertion axis.
         self.ss_needle.insertion_point = insertion_point_from_stage_pose(
             insertion_point,
-            self.current_needle_pose[ 0 ],
+            self.current_needle_pose[0],
         )
 
         ####Change
