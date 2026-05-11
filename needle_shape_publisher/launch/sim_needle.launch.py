@@ -163,7 +163,9 @@ def generate_launch_description():
     # ---------------------------------------------------------------------------
 
     # Continuously publish /stage/state/needle_pose so that the node computes a
-    # non-zero insertion depth.  pose.position.z is set to sim_insertion_depth.
+    # non-zero insertion depth.  In this convention pose.position.z encodes the
+    # insertion depth state; the publisher keeps the shape in the guide frame and
+    # does not re-apply this z value as an additional world-frame translation.
     needle_pose_pub = ExecuteProcess(
         cmd=[
             'ros2', 'topic', 'pub', '--rate', '10',

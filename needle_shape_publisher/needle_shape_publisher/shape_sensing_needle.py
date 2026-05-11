@@ -26,6 +26,7 @@ from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDef
 
 # current package
 from . import utilities
+from .frame_update import insertion_point_from_stage_pose, transform_shape
 from .sensorized_shape_sensing_needle import NeedleNode
 
 
@@ -225,7 +226,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     @property
     def needle_guide_exit_pt(self):
-        return self.current_needle_pose[0] * [1, 1, 1]
+        return self.current_needle_pose[0] * [1, 1, 0]
 
     # needle_guide_exit_pt
 
@@ -241,21 +242,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         current_p, current_R = self.current_needle_pose
 
-        # self.get_logger().debug(
-        #         f"__transform: pmat: {pmat.shape}, Rmat: {Rmat.shape}, p: {current_p.shape}, R:{current_R.shape}" )
-
-        # rigid body transform the current needle pose
-        pmat_tf, Rmat_tf = None, None
-        if pmat is not None:
-            # update needle origin to the insertion point (in the needle frame)
-            pmat_tf = pmat @ current_R.T + current_p.reshape( 1, -1 )
-
-        # if
-
-        if Rmat is not None:
-            Rmat_tf = np.einsum( 'jk, ikl -> ijl', current_R, Rmat )
-
-        return pmat_tf, Rmat_tf
+        return transform_shape( pmat, Rmat, current_p, current_R )
 
     # __transform
 
@@ -299,49 +286,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         if (pmat is None) and (Rmat is None):
             return pmat, Rmat
-
-        # generate the straight length section
-        L_needle      = utilities.calculate_needle_length(pmat)
-        dL            = self.ss_needle.length - L_needle
-        pmat_straight = np.zeros((1, 3), dtype=pmat.dtype)
-        if dL > self.ss_needle.ds:
-            # generate straight needle length in ds increments
-            L_straight = np.arange( 0, (dL // self.ss_needle.ds + 1) * self.ss_needle.ds, self.ss_needle.ds )
-
-            # generate straight needle shape
-            pmat_straight       = np.zeros( (len(L_straight), 3), dtype=pmat.dtype )
-            pmat_straight[:, 2] = L_straight
-
-        # if
-        elif dL > 0:  # less than ds increment
-            pmat_straight        = np.zeros((2, 3), dtype=pmat.dtype)
-            pmat_straight[-1, 2] = dL
-
-        # elif
-        Rmat_straight = np.tile(
-            np.eye(3, dtype=Rmat.dtype),
-            (pmat_straight.shape[0], 1, 1)
-        )
-
-        # update the needle shapes to move coordinate frames
-        pmat = pmat @ Rmat_straight[-1].T + pmat_straight[-1:]
-        Rmat = Rmat_straight[-1:] @ Rmat
-
-        # append to the current pmat and Rmat
-        pmat = np.concatenate(
-            (
-                pmat_straight,
-                pmat[1:],
-            ),
-            axis=0,
-        )
-        Rmat = np.concatenate(
-            (
-                Rmat_straight,
-                Rmat[1:],
-            ),
-            axis=0,
-        )
 
         pmat, Rmat = self.__transform(pmat, Rmat)
 
@@ -485,10 +429,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # skin_entry is assumed to be in the needle/world frame (needle frame == world frame)
         insertion_point = np.array( [ msg.x, msg.y, msg.z ] )
 
-        # update the insertion point relative to the initial base of the insertion point
-        self.ss_needle.insertion_point = (
-            insertion_point
-            - self.needle_guide_exit_pt * [1, 1, 0]
+        # The stage pose carries lateral guide offsets in x/y and insertion depth
+        # in z.  Keep the z component in the needle frame so the downstream shape
+        # model can use it as the air-gap / entry depth along the insertion axis.
+        self.ss_needle.insertion_point = insertion_point_from_stage_pose(
+            insertion_point,
+            self.current_needle_pose[ 0 ],
         )
 
         ####Change
