@@ -26,7 +26,11 @@ from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDef
 
 # current package
 from . import utilities
-from .frame_update import insertion_point_from_stage_pose, transform_shape
+from .frame_update import (
+    insertion_point_from_stage_pose,
+    stage_pose_translation,
+    transform_shape,
+)
 from .sensorized_shape_sensing_needle import NeedleNode
 
 
@@ -226,7 +230,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     @property
     def needle_guide_exit_pt(self):
-        return self.current_needle_pose[0] * [1, 1, 0]
+        return stage_pose_translation( self.current_needle_pose[ 0 ] )
 
     # needle_guide_exit_pt
 
