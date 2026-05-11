@@ -6,6 +6,11 @@
 # curvature of kappa = 0.003 rad/mm (radius R ≈ 333 mm) and a total
 # arc length of 100 mm.
 #
+# The sim bridge converts this mm-based shape curvature to the
+# calibration pipeline's internal rad/m units before generating FBG
+# wavelength shifts, so the downstream published/logged curvatures
+# remain in rad/mm.
+#
 # Points are in mm, from the tissue entry point (index 0) at the origin
 # to the needle tip (index -1).
 #
