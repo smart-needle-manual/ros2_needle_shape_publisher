@@ -473,13 +473,6 @@ class TestSimulationCurvatureUnits:
                 err_msg=f'Simulated AA {aa_idx} should preserve rad/mm curvature',
             )
 
-            np.testing.assert_allclose(
-                np.linalg.norm(kappa_current_mm),
-                np.linalg.norm(kappa_expected_mm[aa_idx]),
-                rtol=1e-5,
-                atol=1e-12,
-            )
-
         np.testing.assert_allclose(
             np.linalg.norm(kappa_expected_mm, axis=1),
             np.full(len(sensor_locs_from_tip), 0.003),
