@@ -49,8 +49,10 @@ Self-contained utility implementing the shape → curvature → Δλ pipeline:
    `piecewise_exp_test.py` in `rban01/needle_shape_sensing_original`).
 5. Compute κx, κy in the material frame.
 6. Interpolate at each active-area (AA) sensor location.
-7. Apply pseudo-inverse calibration matrices:
-   `Δλ_k = pinv(C_k) @ [κx_k, κy_k]`
+7. Convert mm-based curvature to calibration units when needed
+   (`1/mm → 1/m`, scale `×1000` by default) and apply pseudo-inverse
+   calibration matrices:
+   `Δλ_k = pinv(C_k) @ (1000 · [ω0_k, ω1_k])`
 
 ### `hyperion_demo.py` (modified)
 

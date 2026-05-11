@@ -381,6 +381,47 @@ class TestWavelengthShiftInversion:
                 err_msg=f'Roundtrip failed at AA {aa_idx} (loc_from_tip={loc})'
             )
 
+    def test_roundtrip_with_calibration_unit_scaling(self, tmp_path):
+        """Scaling for calibration should scale reconstructed curvature."""
+        param_file = make_test_needle_params_json(tmp_path, num_chs=3, num_aas=2)
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, _, _) = load_needle_params_json(param_file)
+
+        kappa = 0.004
+        L = 80.0
+        pts = make_circular_arc(kappa, L=L, n=81)
+        insertion_depth = L
+        scale = 1000.0
+
+        delta_lambda = shape_to_wavelength_shifts(
+            pts,
+            param_file,
+            insertion_depth=insertion_depth,
+            curvature_scale_for_calibration=scale,
+        )
+
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+        sensor_locs_from_base = [
+            max(0.0, insertion_depth - loc) for loc in sensor_locs_from_tip
+        ]
+        kappa_at = interpolate_curvature_at_sensors(
+            s, kx, ky, sensor_locs_from_base
+        )
+
+        for aa_idx, loc in enumerate(sensor_locs_from_tip):
+            C = cal_matrices[float(loc)]
+            dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
+            kappa_reconstructed = C @ dl
+            np.testing.assert_allclose(
+                kappa_reconstructed,
+                kappa_at[aa_idx] * scale,
+                rtol=1e-6,
+                err_msg=f'Scaled roundtrip failed at sensor loc {loc} mm from tip'
+            )
+
     def test_roundtrip_with_real_needle_params(self):
         """Roundtrip with the default 3CH-4AA-0005 needle param file."""
         if not os.path.isfile(_NEEDLE_DATA):
