@@ -13,8 +13,9 @@ shape polyline  (Nx3, mm)
   → arc-length parametrisation
   → unit tangents  (Savitzky-Golay local-quadratic or central differences)
   → rotation-minimising parallel-transport frame
-  → curvature components (κx, κy) in the material frame
-  → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = +κx
+  → curvature components (κx, κy) in the material frame  [rad/mm]
+  → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = +κx  [rad/mm]
+  → convert to the calibration pipeline's processed-curvature units [rad/m]
   → interpolation at each active-area (AA) sensor location
   → inverse calibration:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
 
@@ -28,8 +29,11 @@ Projecting:
     κx = (dT/ds)·e1 = +ω[1]   →   ω[1] = +κx
     κy = (dT/ds)·e2 = −ω[0]   →   ω[0] = −κy
 
-This is the convention stored in ``current_curvatures[0:2, aa]`` after the
-normal FBG processing pipeline.
+The shape geometry here is parameterised in mm, but the downstream
+``needle_shape_sensing`` calibration matrices operate on processed curvatures
+in rad/m and later scale by ``1e-3`` before storing
+``current_curvatures[0:2, aa]``. Therefore the sim bridge converts the
+shape-derived rad/mm values to rad/m immediately before applying ``pinv(C)``.
 
 References
 ----------
@@ -56,6 +60,9 @@ try:
     _YAML = True
 except ImportError:
     _YAML = False
+
+
+MM_TO_M_CURVATURE_SCALE = 1e3
 
 
 # ---------------------------------------------------------------------------
@@ -236,12 +243,16 @@ def shape_to_wavelength_shifts(
     # Interpolate at sensor locations and map to body-frame angular velocity:
     #   ω[0] = −(dT/ds)·d2 = −κy   (slot 0 of current_curvatures)
     #   ω[1] = +(dT/ds)·d1 = +κx   (slot 1 of current_curvatures)
+    # The shape geometry is in mm, but the calibration matrices expect
+    # processed curvatures in rad/m. Convert here so the downstream
+    # ShapeSensingFBGNeedle.update_curvatures() 1e-3 scaling lands back on the
+    # original rad/mm curvature values.
     s_min, s_max = arc[0], arc[-1]
     kappa = np.zeros((len(sensor_locs_from_tip), 2))
     for i, s in enumerate(sensor_s):
         sc = float(np.clip(s, s_min, s_max))
-        kappa[i, 0] = -float(np.interp(sc, arc, ky))
-        kappa[i, 1] = float(np.interp(sc, arc, kx))
+        kappa[i, 0] = -float(np.interp(sc, arc, ky)) * MM_TO_M_CURVATURE_SCALE
+        kappa[i, 1] = float(np.interp(sc, arc, kx)) * MM_TO_M_CURVATURE_SCALE
 
     # Inverse calibration: Δλ = pinv(C) @ [ω[0], ω[1]]
     # Use nearest-key lookup so that minor floating-point differences between

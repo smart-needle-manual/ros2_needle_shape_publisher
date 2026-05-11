@@ -47,10 +47,12 @@ Self-contained utility implementing the shape → curvature → Δλ pipeline:
    unavailable).
 4. Build a rotation-minimising parallel-transport frame (conceptual baseline:
    `piecewise_exp_test.py` in `rban01/needle_shape_sensing_original`).
-5. Compute κx, κy in the material frame.
+5. Compute κx, κy in the material frame in rad/mm.
 6. Interpolate at each active-area (AA) sensor location.
-7. Apply pseudo-inverse calibration matrices:
-   `Δλ_k = pinv(C_k) @ [κx_k, κy_k]`
+7. Convert those interpolated mm-based curvatures to the calibration
+   pipeline's processed rad/m units before inverting the calibration matrices.
+8. Apply pseudo-inverse calibration matrices:
+   `Δλ_k = pinv(C_k) @ [ω0_k, ω1_k]`
 
 ### `hyperion_demo.py` (modified)
 

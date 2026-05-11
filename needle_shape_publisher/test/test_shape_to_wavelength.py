@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 from needle_shape_publisher.shape_to_wavelength import (
+    MM_TO_M_CURVATURE_SCALE,
     build_parallel_transport_frame,
     compute_arc_lengths,
     compute_curvature_components,
@@ -314,7 +315,8 @@ class TestBodyFrameConvention:
         for aa_idx, loc in enumerate(sensor_locs_from_tip):
             C = cal_matrices[float(loc)]
             dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
-            omega_reconstructed = C @ dl  # should equal [ω[0], ω[1]] = [−ky, kx]
+            omega_processed = C @ dl
+            omega_reconstructed = omega_processed / MM_TO_M_CURVATURE_SCALE
 
             np.testing.assert_allclose(
                 omega_reconstructed, kappa_at[aa_idx],
@@ -367,14 +369,18 @@ class TestWavelengthShiftInversion:
         )
 
         delta_lambda = curvatures_to_wavelength_shifts(
-            kappa_at, cal_matrices, sensor_locs_from_tip, num_chs
+            kappa_at * MM_TO_M_CURVATURE_SCALE,
+            cal_matrices,
+            sensor_locs_from_tip,
+            num_chs,
         )
 
         # Forward pass: reconstruct curvature from delta_lambda
         for aa_idx, loc in enumerate(sensor_locs_from_tip):
             C = cal_matrices[float(loc)]
             dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
-            kappa_reconstructed = C @ dl
+            kappa_processed = C @ dl
+            kappa_reconstructed = kappa_processed / MM_TO_M_CURVATURE_SCALE
             np.testing.assert_allclose(
                 kappa_reconstructed, kappa_at[aa_idx],
                 rtol=1e-6,
@@ -413,13 +419,66 @@ class TestWavelengthShiftInversion:
         for aa_idx, loc in enumerate(sensor_locs_from_tip):
             C = cal_matrices[float(loc)]
             dl = np.array([delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)])
-            kappa_reconstructed = C @ dl
+            kappa_processed = C @ dl
+            kappa_reconstructed = kappa_processed / MM_TO_M_CURVATURE_SCALE
             np.testing.assert_allclose(
                 kappa_reconstructed, kappa_at[aa_idx],
                 rtol=1e-5,
                 atol=1e-12,
                 err_msg=f'Roundtrip failed at sensor loc {loc} mm from tip'
             )
+
+
+class TestSimulationCurvatureUnits:
+    """Verify the sim bridge preserves mm-based curvatures after calibration."""
+
+    def test_default_sim_shape_roundtrips_to_mm_curvature(self):
+        """Default sim YAML should still publish/log curvatures in rad/mm."""
+        if not os.path.isfile(_DEFAULT_SHAPE_YAML) or not os.path.isfile(_NEEDLE_DATA):
+            pytest.skip('Default shape YAML or needle param file not found')
+
+        insertion_depth = 100.0
+        pts = load_shape_file(_DEFAULT_SHAPE_YAML)
+        (cal_matrices, sensor_locs_from_tip,
+         num_chs, _, _) = load_needle_params_json(_NEEDLE_DATA)
+
+        delta_lambda = shape_to_wavelength_shifts(
+            pts, _NEEDLE_DATA, insertion_depth=insertion_depth
+        )
+
+        s = compute_arc_lengths(pts)
+        tangents = compute_tangents(pts, s)
+        frames = build_parallel_transport_frame(tangents)
+        kx, ky = compute_curvature_components(s, tangents, frames)
+        sensor_locs_from_base = [
+            max(0.0, insertion_depth - loc) for loc in sensor_locs_from_tip
+        ]
+        kappa_expected_mm = interpolate_curvature_at_sensors(
+            s, kx, ky, sensor_locs_from_base
+        )
+
+        for aa_idx, loc in enumerate(sensor_locs_from_tip):
+            C = cal_matrices[float(loc)]
+            dl = np.array([
+                delta_lambda[ch][aa_idx] for ch in range(1, num_chs + 1)
+            ])
+            kappa_processed_m = C @ dl
+            kappa_current_mm = kappa_processed_m / MM_TO_M_CURVATURE_SCALE
+
+            np.testing.assert_allclose(
+                kappa_current_mm,
+                kappa_expected_mm[aa_idx],
+                rtol=1e-5,
+                atol=1e-12,
+                err_msg=f'Simulated AA {aa_idx} should preserve rad/mm curvature',
+            )
+
+        np.testing.assert_allclose(
+            np.linalg.norm(kappa_expected_mm, axis=1),
+            np.full(len(sensor_locs_from_tip), 0.003),
+            rtol=5e-3,
+            err_msg='Default sim shape should recover ~0.003 rad/mm curvature',
+        )
 
 
 # ---------------------------------------------------------------------------
