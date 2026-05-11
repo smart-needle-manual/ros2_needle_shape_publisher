@@ -11,7 +11,8 @@ shape polyline.  The pipeline is:
     → curvature components (κx, κy) in the material frame
     → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = κx
     → interpolation at each active-area (AA) sensor location
-    → inverse calibration matrix:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
+  → optional unit alignment before inverse calibration
+  → inverse calibration matrix:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
 
 The inverse calibration step mirrors the forward mapping used by the
 needle-shape-publisher pipeline:
@@ -438,6 +439,7 @@ def shape_to_wavelength_shifts(
     needle_param_file: str,
     insertion_depth: float = None,
     noise_std: float = 0.0,
+    curvature_scale_for_calibration: float = 1.0,
 ) -> dict:
     """Compute FBG wavelength shifts (Δλ) from a 3D needle shape polyline.
 
@@ -458,6 +460,10 @@ def shape_to_wavelength_shifts(
         ``shape_points``.
     noise_std : float, optional
         Standard deviation of Gaussian noise added to each Δλ (nm).
+    curvature_scale_for_calibration : float, optional
+        Multiplicative scale applied to body-frame curvature values before
+        inverse calibration. Use ``1000.0`` when shape geometry is in mm
+        (curvature in 1/mm) but calibration matrices map Δλ to 1/m.
 
     Returns
     -------
@@ -487,8 +493,12 @@ def shape_to_wavelength_shifts(
     kappa_at_sensors = interpolate_curvature_at_sensors(
         arc_lengths, kx, ky, sensor_locs_from_base
     )
+    kappa_for_calibration = (
+        np.asarray(kappa_at_sensors, dtype=float)
+        * float(curvature_scale_for_calibration)
+    )
     delta_lambda = curvatures_to_wavelength_shifts(
-        kappa_at_sensors, cal_matrices, sensor_locs_from_tip, num_chs
+        kappa_for_calibration, cal_matrices, sensor_locs_from_tip, num_chs
     )
 
     if noise_std > 0.0:

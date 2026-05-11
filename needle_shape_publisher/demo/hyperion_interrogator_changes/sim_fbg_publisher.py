@@ -16,6 +16,7 @@ shape polyline  (Nx3, mm)
   → curvature components (κx, κy) in the material frame
   → body-frame angular-velocity mapping: ω[0] = −κy, ω[1] = +κx
   → interpolation at each active-area (AA) sensor location
+  → unit alignment (default): [ω]_mm * 1000 → [ω]_m
   → inverse calibration:  Δλ_k = pinv(C_k) @ [ω[0]_k, ω[1]_k]
 
 Body-frame convention
@@ -192,6 +193,7 @@ def shape_to_wavelength_shifts(
     num_chs: int,
     insertion_depth: float = None,
     noise_std: float = 0.0,
+    curvature_scale_for_calibration: float = 1000.0,
 ) -> dict:
     """Compute per-channel FBG wavelength shifts from a 3-D needle shape.
 
@@ -211,6 +213,10 @@ def shape_to_wavelength_shifts(
         Current insertion depth (mm).  Defaults to the polyline's arc length.
     noise_std : float, optional
         Optional Gaussian noise σ (nm) added to each Δλ.
+    curvature_scale_for_calibration : float, optional
+        Multiplicative scale applied to body-frame curvature values before
+        inverse calibration. Default ``1000.0`` converts 1/mm curvature from
+        mm-based shape geometry to 1/m when calibration matrices are SI-based.
 
     Returns
     -------
@@ -243,6 +249,10 @@ def shape_to_wavelength_shifts(
         kappa[i, 0] = -float(np.interp(sc, arc, ky))
         kappa[i, 1] = float(np.interp(sc, arc, kx))
 
+    kappa_for_calibration = (
+        np.asarray(kappa, dtype=float) * float(curvature_scale_for_calibration)
+    )
+
     # Inverse calibration: Δλ = pinv(C) @ [ω[0], ω[1]]
     # Use nearest-key lookup so that minor floating-point differences between
     # cal_matrices keys and sensor_location_tip values do not raise a KeyError.
@@ -256,7 +266,7 @@ def shape_to_wavelength_shifts(
     delta_lambda = {ch: np.zeros(num_aas) for ch in range(1, num_chs + 1)}
     for aa_idx, loc in enumerate(sensor_locs_from_tip):
         C = _nearest_cal(float(loc))       # (2, num_chs)
-        dl = np.linalg.pinv(C) @ kappa[aa_idx]   # (num_chs,)
+        dl = np.linalg.pinv(C) @ kappa_for_calibration[aa_idx]   # (num_chs,)
         for ci in range(num_chs):
             delta_lambda[ci + 1][aa_idx] = float(dl[ci])
 
