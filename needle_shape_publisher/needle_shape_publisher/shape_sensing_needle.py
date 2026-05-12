@@ -291,6 +291,59 @@ class ShapeSensingNeedleNode( NeedleNode ):
         if (pmat is None) and (Rmat is None):
             return pmat, Rmat
 
+        # For shape-driven simulation, the model can return only the inserted
+        # section (relative to full needle length). In that case append the
+        # remaining straight segment so publishing remains over full length.
+        #
+        # For regular data-driven/non-simulation operation, the model already
+        # returns full-length shape, so dL <= 0 and this block is a no-op.
+        L_needle = utilities.calculate_needle_length( pmat )
+        dL = self.ss_needle.length - L_needle
+        if dL > 0:
+            pmat_straight = np.zeros( (1, 3), dtype=pmat.dtype )
+            if dL > self.ss_needle.ds:
+                # generate straight needle length in ds increments
+                L_straight = np.arange(
+                    0,
+                    (dL // self.ss_needle.ds + 1) * self.ss_needle.ds,
+                    self.ss_needle.ds,
+                )
+
+                # generate straight needle shape
+                pmat_straight = np.zeros( (len( L_straight ), 3), dtype=pmat.dtype )
+                pmat_straight[:, 2] = L_straight
+
+            # if
+            else:  # less than ds increment
+                pmat_straight = np.zeros( (2, 3), dtype=pmat.dtype )
+                pmat_straight[-1, 2] = dL
+
+            # else
+            Rmat_straight = np.tile(
+                np.eye( 3, dtype=Rmat.dtype ),
+                (pmat_straight.shape[0], 1, 1),
+            )
+
+            # update the needle shapes to move coordinate frames
+            pmat = pmat @ Rmat_straight[-1].T + pmat_straight[-1:]
+            Rmat = Rmat_straight[-1:] @ Rmat
+
+            # append to the current pmat and Rmat
+            pmat = np.concatenate(
+                (
+                    pmat_straight,
+                    pmat[1:],
+                ),
+                axis=0,
+            )
+            Rmat = np.concatenate(
+                (
+                    Rmat_straight,
+                    Rmat[1:],
+                ),
+                axis=0,
+            )
+
         pmat, Rmat = self.__transform(pmat, Rmat)
 
         return pmat, Rmat
