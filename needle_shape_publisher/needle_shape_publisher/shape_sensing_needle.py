@@ -667,7 +667,7 @@ def main( args=None ):
       ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
         header: {frame_id: needle},
         pose: {
-          position: {x: 0.0, y: 0.0, z: 0.050},
+          position: {x: 0.0, y: 0.0, z: 75.0},
           orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
         }
       }"
