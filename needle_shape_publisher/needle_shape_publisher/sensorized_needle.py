@@ -135,9 +135,18 @@ class SensorizedNeedleNode( NeedleNode ):
         # get the FBG signals
         # TODO: perform appending by channel
         signals_dict = utilities.unpack_fbg_msg( msg )
-        self.get_logger().debug( f"Signals dictionary unpacked: {signals_dict}" )
-        # signals = np.array( list( signals_dict.values() ) ).ravel()  # to be improved
+        self.get_logger().info(
+            "Processed signal channel sizes: " +
+            ", ".join(f"CH{k}={len(v)}" for k, v in signals_dict.items())
+        )
         signals = np.hstack( list( signals_dict.values() ) ).ravel()
+
+        expected_num_signals = self.ss_needle.num_channels * self.ss_needle.num_activeAreas
+
+        self.get_logger().info(
+            f"Incoming processed signal length = {signals.shape[0]}, "
+            f"expected = {expected_num_signals}"
+        )
 
         # perform temperature compensation
         if self.temperature_compensate:
@@ -147,13 +156,13 @@ class SensorizedNeedleNode( NeedleNode ):
 
         self.get_logger().debug( f"Signals unwrapped: {signals}" )
         self.get_logger().debug(
-                f"Shape of signals: {signals.shape} | Shape of wl container: {self.__wavelength_container.shape}" )
+            f"Shape of signals: {signals.shape} | Shape of wl container: {self.__wavelength_container.shape}" )
 
         # add the signals to the container
         if signals.shape[0] != self.__wavelength_container.shape[1]: # check if the correct size to avoid errors.
             self.get_logger().warn(f"Wrong sensor shape size! Size is {signals.shape}, needs size of {(self.__wavelength_container.shape[1],)}")
-            return 
-        # if 
+            return
+        # if
         self.__wavelength_container[ self.__wavelength_container_idx ] = signals
         self.__wavelength_container_idx += 1
         if self.__wavelength_container_idx >= self.num_samples:

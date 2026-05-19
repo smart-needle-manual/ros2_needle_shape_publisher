@@ -12,6 +12,7 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 
 pkg_hyperion_interrogator = get_package_share_directory('hyperion_interrogator')
 pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher')
@@ -101,8 +102,6 @@ def generate_launch_description():
             'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
             'manual_mode': LaunchConfiguration('manual_mode'),
             'shape_type': LaunchConfiguration('shape_type'),
-            # Disable temperature compensation: demo signals have no temperature
-            # channel, so enabling it zeros out the processed wavelength shifts.
             'tempCompensate': TextSubstitution(text='False'),
         }.items()
     )
@@ -123,7 +122,6 @@ def generate_launch_description():
                 pkg_needle_shape_publisher, 'needle_data',
                 LaunchConfiguration(arg_params.name)
             ]),
-            # New sim_level=1 shape-driven parameters
             'sim_shape_file': LaunchConfiguration('sim_shape_file'),
             'sim_insertion_depth': LaunchConfiguration('sim_insertion_depth'),
         }.items()
@@ -162,13 +160,29 @@ def generate_launch_description():
     # Sim-only helpers: publish the two topics that ShapeSensingNeedleNode needs
     # ---------------------------------------------------------------------------
 
-    # Continuously publish /stage/state/needle_pose so that the node computes a
-    # non-zero insertion depth.  In this convention pose.position.z encodes the
-    # insertion depth state; the publisher keeps the shape in the guide frame and
-    # does not re-apply this z value as an additional world-frame translation.
-    needle_pose_pub = ExecuteProcess(
+    # TopicRepeater subscribes on needle_pose_in (written exclusively by Slicer)
+    # and publishes on needle_pose. wait_for_input=True means it stays silent
+    # until Slicer sends its first message after alignment — no default broadcast
+    # that could compete. The one-shot seed below handles the pre-alignment boot.
+    needle_pose_pub = Node(
+        package='needle_shape_publisher',
+        executable='topic_repeater',
+        name='needle_pose_repeater',
+        parameters=[{
+            'topic': '/stage/state/needle_pose',
+            'input_topic': '/stage/state/needle_pose_in',
+            'msg_type': 'geometry_msgs/msg/PoseStamped',
+            'rate_hz': 10.0,
+            'wait_for_input': True,
+        }],
+    )
+
+    # One-shot seed: gives ShapeSensingNeedleNode a valid needle_pose at boot
+    # so needlepose_received=True before Slicer connects. Exits immediately so
+    # it cannot compete with Slicer later.
+    needle_pose_seed = ExecuteProcess(
         cmd=[
-            'ros2', 'topic', 'pub', '--rate', '10',
+            'ros2', 'topic', 'pub', '--once',
             '/stage/state/needle_pose',
             'geometry_msgs/msg/PoseStamped',
             [
@@ -182,11 +196,7 @@ def generate_launch_description():
     )
 
     # Auto-call the sensor calibrate service so that /needle/sensor/processed
-    # starts flowing without manual intervention.  A short delay ensures the
-    # hyperion_demo node is fully up before the call is made.
-    # NOTE: the service name 'sensor/calibrate' must match the name registered
-    #       in HyperionPublisher.  Verify against the hyperion_interrogator
-    #       package if a different name is used.
+    # starts flowing without manual intervention.
     calibrate_service_call = TimerAction(
         period=5.0,
         actions=[
@@ -203,6 +213,7 @@ def generate_launch_description():
     )
 
     ld.add_action(needle_pose_pub)
+    ld.add_action(needle_pose_seed)
     ld.add_action(calibrate_service_call)
 
     return ld

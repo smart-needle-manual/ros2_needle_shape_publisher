@@ -3,16 +3,12 @@
 A generic ROS 2 node that continuously re-publishes the last received message
 on a given topic.
 
-Any publisher (including a one-shot ``ros2 topic pub --once``) that sends a
-message to the topic will update the value that is continuously broadcast.
-This allows the "live default" for helper topics such as
-``/stage/state/needle_pose`` and ``/needle/state/skin_entry`` to be overridden
-at runtime without restarting the launch file.
-
 ROS 2 parameters
 ----------------
 topic : str
-    The topic name to subscribe to and publish on (required).
+    The topic name to publish on (required).
+input_topic : str
+    The topic name to subscribe to (default: same as topic).
 msg_type : str
     The fully-qualified message type string, e.g.
     ``'geometry_msgs/msg/PoseStamped'`` (required).
@@ -21,6 +17,11 @@ rate_hz : float
 default_msg : str
     JSON/YAML representation of the initial message to publish before any
     external message has been received (default: ``'{}'``, i.e. all-zeros).
+wait_for_input : bool
+    If True, do not publish anything until the first real message arrives on
+    input_topic. Ignores default_msg. Use this when a separate one-shot seed
+    publisher handles the initial value and the repeater should only take over
+    once a live external publisher (e.g. Slicer) has sent its first message.
 """
 
 import json
@@ -34,9 +35,12 @@ from rosidl_runtime_py import set_message_fields
 class TopicRepeater(Node):
     """Continuously re-publishes the last received message on a topic.
 
-    The node subscribes and publishes on the same topic.  When any other node
-    (or a manual ``ros2 topic pub``) sends a message, the new value is cached
-    and becomes the value that is re-broadcast on every timer tick.
+    Subscribes on input_topic, publishes on topic. When they differ the node
+    never receives its own output, eliminating the self-feedback loop that
+    causes alternating values when a competing publisher is also present.
+
+    When wait_for_input=True the repeater stays completely silent until the
+    first message arrives on input_topic, then starts broadcasting at rate_hz.
     """
 
     def __init__(self):
@@ -44,19 +48,30 @@ class TopicRepeater(Node):
 
         # Declare parameters
         self.declare_parameter('topic', '')
+        self.declare_parameter('input_topic', '')
         self.declare_parameter('msg_type', '')
         self.declare_parameter('rate_hz', 10.0)
         self.declare_parameter('default_msg', '{}')
+        self.declare_parameter('wait_for_input', False)
 
-        topic = self.get_parameter('topic').get_parameter_value().string_value
-        msg_type_str = self.get_parameter('msg_type').get_parameter_value().string_value
-        rate_hz = self.get_parameter('rate_hz').get_parameter_value().double_value
+        topic           = self.get_parameter('topic').get_parameter_value().string_value
+        input_topic     = self.get_parameter('input_topic').get_parameter_value().string_value
+        msg_type_str    = self.get_parameter('msg_type').get_parameter_value().string_value
+        rate_hz         = self.get_parameter('rate_hz').get_parameter_value().double_value
         default_msg_str = self.get_parameter('default_msg').get_parameter_value().string_value
+        self._wait_for_input = self.get_parameter('wait_for_input').get_parameter_value().bool_value
 
         if not topic:
             raise ValueError('Parameter "topic" must be set to a non-empty topic name.')
         if not msg_type_str:
             raise ValueError('Parameter "msg_type" must be set, e.g. "geometry_msgs/msg/PoseStamped".')
+
+        # If no separate input_topic given, fall back to topic (old behaviour).
+        if not input_topic:
+            input_topic = topic
+
+        self._rate_hz = rate_hz
+        self._input_received = False
 
         # Resolve the message class dynamically
         MsgType = get_message(msg_type_str)
@@ -74,26 +89,34 @@ class TopicRepeater(Node):
                     'Using zero-initialised message.'
                 )
 
-        # Publisher and subscriber on the same topic.
-        # The subscriber receiving its own published messages is benign:
-        # it simply re-caches the same value.
         qos = 10
         self._pub = self.create_publisher(MsgType, topic, qos)
-        self._sub = self.create_subscription(MsgType, topic, self._callback, qos)
+        self._sub = self.create_subscription(MsgType, input_topic, self._callback, qos)
 
-        # Timer to continuously republish the cached message
-        self._timer = self.create_timer(1.0 / rate_hz, self._publish)
+        # When wait_for_input=True the timer is created only after the first
+        # real message arrives — see _callback. Otherwise start immediately.
+        self._timer = None
+        if not self._wait_for_input:
+            self._timer = self.create_timer(1.0 / rate_hz, self._publish)
 
         self.get_logger().info(
-            f'TopicRepeater ready: topic={topic!r}  type={msg_type_str}  rate={rate_hz} Hz'
+            f'TopicRepeater ready: sub={input_topic!r}  pub={topic!r}  '
+            f'type={msg_type_str}  rate={rate_hz} Hz  '
+            f'wait_for_input={self._wait_for_input}'
         )
 
     def _callback(self, msg):
-        """Cache the latest message from any publisher on the topic."""
+        """Cache the latest message received on input_topic."""
         self._latest_msg = msg
+        if self._wait_for_input and not self._input_received:
+            self._input_received = True
+            self._timer = self.create_timer(1.0 / self._rate_hz, self._publish)
+            self.get_logger().info(
+                'TopicRepeater: first input received — starting broadcast.'
+            )
 
     def _publish(self):
-        """Re-publish the cached message."""
+        """Re-publish the cached message on topic."""
         self._pub.publish(self._latest_msg)
 
 
