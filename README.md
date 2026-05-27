@@ -1,5 +1,6 @@
 # ROS 2 Needle Shape Publisher
-Author: Dimitri Lezcano
+Author: Dimitri Lezcano (Up to 08/2025)
+Author: Rajdeep Banerjee
 
 This is a repository for publishing the needle shape for the Sensorized Needle Robot project in collaboration with Brigham Women's Hospital.
 
