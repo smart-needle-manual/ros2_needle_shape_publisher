@@ -160,26 +160,10 @@ def generate_launch_description():
     # Sim-only helpers: publish the two topics that ShapeSensingNeedleNode needs
     # ---------------------------------------------------------------------------
 
-    # TopicRepeater subscribes on needle_pose_in (written exclusively by Slicer)
-    # and publishes on needle_pose. wait_for_input=True means it stays silent
-    # until Slicer sends its first message after alignment — no default broadcast
-    # that could compete. The one-shot seed below handles the pre-alignment boot.
-    needle_pose_pub = Node(
-        package='needle_shape_publisher',
-        executable='topic_repeater',
-        name='needle_pose_repeater',
-        parameters=[{
-            'topic': '/stage/state/needle_pose',
-            'input_topic': '/stage/state/needle_pose_in',
-            'msg_type': 'geometry_msgs/msg/PoseStamped',
-            'rate_hz': 10.0,
-            'wait_for_input': True,
-        }],
-    )
-
     # One-shot seed: gives ShapeSensingNeedleNode a valid needle_pose at boot
-    # so needlepose_received=True before Slicer connects. Exits immediately so
-    # it cannot compete with Slicer later.
+    # so needlepose_received=True before Slicer connects. Exits immediately.
+    # Slicer (ShapeCall) now publishes directly to /stage/state/needle_pose —
+    # no TopicRepeater relay needed.
     needle_pose_seed = ExecuteProcess(
         cmd=[
             'ros2', 'topic', 'pub', '--once',
@@ -212,7 +196,6 @@ def generate_launch_description():
         ],
     )
 
-    ld.add_action(needle_pose_pub)
     ld.add_action(needle_pose_seed)
     ld.add_action(calibrate_service_call)
 

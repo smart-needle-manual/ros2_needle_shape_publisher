@@ -6,6 +6,10 @@ import numpy as np
 import rclpy
 from rclpy import Parameter
 from rclpy.logging import LoggingSeverity
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+import threading
+
 # messages
 from geometry_msgs.msg import PoseArray, Point, PoseStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -74,6 +78,22 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.needlepose_received = False
         self.curvatures_received = False
 
+        # Dirty flag: set True by sub_curvatures_callback and sub_needlepose_callback.
+        # publish_shape skips get_needleshape() (the optimizer) when inputs have not
+        # changed since the last successful compute, and serves cached poses instead.
+        self._inputs_dirty = False
+        self._cached_pmat  = None
+        self._cached_Rmat  = None
+
+        # Callback groups: timer gets its own MutuallyExclusive group so the optimizer
+        # cannot block incoming subscriber callbacks. Subscriptions share a Reentrant
+        # group so curvature and pose messages are processed concurrently.
+        self._timer_cbg = MutuallyExclusiveCallbackGroup()
+        self._sub_cbg   = ReentrantCallbackGroup()
+
+        self._curvature_lock     = threading.Lock()
+        self._use_ext_curvatures = False  # latched True by service call from Slicer
+
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
 
         # Declare and apply the shape type parameter.
@@ -119,11 +139,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
             descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
         ).get_parameter_value().bool_value
 
-        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxit[...]
-        
+        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxi[...]
+
         self.ss_needle.optimizer.options[ 'options' ]          = { 'maxiter': optim_maxiter }
         self.ss_needle.optimizer.options[ 'w_init_bounds' ][2] = [ -1e-3, 1e-3 ]
-        
+
         self.ss_needle.ref_wavelengths    = np.ones_like( self.ss_needle.ref_wavelengths )
         self.ss_needle.current_depth      = 0
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
@@ -161,19 +181,29 @@ class ShapeSensingNeedleNode( NeedleNode ):
             Float64MultiArray,
             'state/curvatures',
             self.sub_curvatures_callback,
-            10
+            10,
+            callback_group=self._sub_cbg,
+        )
+        self.sub_curvatures_ext = self.create_subscription(
+            Float64MultiArray,
+            'state/curvatures_in',
+            self.sub_curvatures_ext_callback,
+            10,
+            callback_group=self._sub_cbg,
         )
         self.sub_entrypoint = self.create_subscription(
             Point,
             'state/skin_entry',
             self.sub_entrypoint_callback,
-            10
+            10,
+            callback_group=self._sub_cbg,
         )
         self.sub_needlepose = self.create_subscription(
             PoseStamped,
             '/stage/state/needle_pose',
             self.sub_needlepose_callback,
-            10
+            10,
+            callback_group=self._sub_cbg,
         )
 
         # services
@@ -192,11 +222,23 @@ class ShapeSensingNeedleNode( NeedleNode ):
             "shapetype/update",
             self.srv_update_shapetype_callback,
         )
+        self.srv_use_ext_curvatures = self.create_service(
+            Trigger,
+            'curvatures/use_external',
+            self.srv_use_ext_curvatures_callback,
+        )
+        self.srv_use_fbg_curvatures = self.create_service(
+            Trigger,
+            'curvatures/use_fbg',
+            self.srv_use_fbg_curvatures_callback,
+        )
 
         # create timers
         ####Change
-        self.pub_shape_timer = self.create_timer( 0.05, self.publish_shape )
-        # self.pub_shape_timer = self.create_timer( 20, self.publish_shape )
+        self.pub_shape_timer = self.create_timer(
+            0.05, self.publish_shape,
+            callback_group=self._timer_cbg,  # isolated: optimizer never blocks subs
+        )
         # NOTE: In `needle.manual_mode`, `publish_shape()` will only compute/publish
         # once BOTH `/needle/state/skin_entry` (geometry_msgs/msg/Point) and
         # `/stage/state/needle_pose` (geometry_msgs/msg/PoseStamped) have been received.
@@ -206,7 +248,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # the PoseStamped. Example continuous publishers:
         #
         #   ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
-        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w[...]
+        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
         #
         # Using `--once` is fine for single-shot updates, but for robust operation
         # it is often better to continuously publish both inputs.
@@ -261,7 +303,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####End Change
 
         ####Edit: FIXME: elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM # inverse strain optim + linear interp
-        
+
         if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER) == NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER:  # single layer
             pmat, Rmat = self.ss_needle.get_needle_shape( self.kc_i[ 0 ], self.w_init_i )
 
@@ -367,7 +409,19 @@ class ShapeSensingNeedleNode( NeedleNode ):
                 )
                 return
         ####End Change
-        
+
+        # Skip optimizer when inputs have not changed since last compute.
+        # Publish the cached shape so downstream (ShapeCall) continues to receive
+        # updates at 20 Hz even during idle periods, without re-running the optimizer.
+        if not self._inputs_dirty:
+            if self._cached_pmat is not None and self._cached_Rmat is not None:
+                header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
+                msg_shape = utilities.poses2msg( self._cached_pmat, self._cached_Rmat, header=header )
+                msg_depth = Float64( data=float( self.insertion_depth ) )
+                self.pub_shape.publish( msg_shape )
+                self.pub_depth.publish( msg_depth )
+            return
+
         ####Change
         try:
             self.get_logger().debug("Calling get_needleshape()")
@@ -378,7 +432,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             import traceback
             self.get_logger().error(traceback.format_exc())
             return
-        
+
         #pmat, Rmat = self.get_needleshape()
         ####End Change
 
@@ -404,6 +458,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
             return
 
         # if
+
+        # Cache result and clear dirty flag now that optimizer has run successfully.
+        self._cached_pmat  = pmat
+        self._cached_Rmat  = Rmat
+        self._inputs_dirty = False
 
         # needle shape length
         needle_L = np.linalg.norm( np.diff( pmat, axis=0 ), 2, 1 ).sum()
@@ -464,15 +523,16 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     def sub_curvatures_callback( self, msg: Float64MultiArray ):
         """ Subscription to needle sensor curvatures """
-        # grab the current curvatures
-        curvatures = np.reshape( msg.data, (2, -1), order='F' )
+        with self._curvature_lock:
+            if self._use_ext_curvatures:
+                return
+            curvatures = np.reshape( msg.data, (2, -1), order='F' )
+            self.ss_needle.current_curvatures = curvatures
+            self.curvatures_received = True
+            self._inputs_dirty = True
 
-        self.get_logger().debug(f"Curvatures X: {curvatures[0]}")
-        self.get_logger().debug(f"Curvatures Y: {curvatures[1]}")
-
-        # update the curvatures
-        self.ss_needle.current_curvatures = curvatures
-        self.curvatures_received = True
+        self.get_logger().debug(f"Curvatures X: {self.ss_needle.current_curvatures[0]}")
+        self.get_logger().debug(f"Curvatures Y: {self.ss_needle.current_curvatures[1]}")
 
         if not self.ss_needle.is_calibrated:
             self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
@@ -480,6 +540,46 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # if
 
     # sub_curvatures_callback
+    def sub_curvatures_ext_callback( self, msg: Float64MultiArray ):
+        """ External curvature feed (e.g. Slicer). Active only while latched on via service. """
+        with self._curvature_lock:
+            if not self._use_ext_curvatures:
+                return
+            curvatures = np.reshape( msg.data, (2, -1), order='F' )
+            self.ss_needle.current_curvatures = curvatures
+            self.curvatures_received = True
+            self._inputs_dirty = True
+
+        self.get_logger().debug(f"[ext] Curvatures X: {self.ss_needle.current_curvatures[0]}")
+        self.get_logger().debug(f"[ext] Curvatures Y: {self.ss_needle.current_curvatures[1]}")
+
+        if not self.ss_needle.is_calibrated:
+            self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
+
+    # sub_curvatures_ext_callback
+
+    def srv_use_ext_curvatures_callback( self, request, response ):
+        """ Latch onto external curvature feed. Call once from Slicer when ready. """
+        with self._curvature_lock:
+            self._use_ext_curvatures = True
+        response.success = True
+        response.message = "Curvature source: external (state/curvatures_in)"
+        self.get_logger().info( response.message )
+        return response
+
+    # srv_use_ext_curvatures_callback
+
+    def srv_use_fbg_curvatures_callback( self, request, response ):
+        """ Revert to FBG pipeline curvatures. """
+        with self._curvature_lock:
+            self._use_ext_curvatures = False
+        response.success = True
+        response.message = "Curvature source: FBG pipeline (state/curvatures)"
+        self.get_logger().info( response.message )
+        return response
+
+    # srv_use_fbg_curvatures_callback
+
 
     def sub_entrypoint_callback( self, msg: Point ):
         """ Subscription to entrypoint topic """
@@ -535,8 +635,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####Change
         self.needlepose_received = True
         self.get_logger().debug("Received needle pose data (manual mode flag updated).")
+        self._inputs_dirty = True
         ####End Change
-        
+
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
 
         # update the history of orientations (NOT USED YET)
@@ -563,7 +664,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ####End Change
 
     # sub_needlepose_callback
-            
+
     def srv_needleshape_query_callback(self, req: GetPoseArray.Request, res: GetPoseArray.Response):
         """ Query the current needle shape """
         header = Header(stamp=self.get_clock().now().to_msg(), frame_id='needle')
@@ -572,7 +673,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         if pmat is None or Rmat is None:
             res.success = False
             return res
-        
+
         # if
 
         msg_pose = utilities.poses2msg(pmat, Rmat, header=header)
@@ -584,7 +685,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
-            
+
     def srv_needleshape_querypt_callback(self, req: GetPoseFromPoseArray.Request, res: GetPoseFromPoseArray.Response):
         """ Query the current needle shape """
         pmat, Rmat = self.get_needleshape()
@@ -592,9 +693,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         if pmat is None or Rmat is None:
             res.success = False
             return res
-        
-        # if
 
+        # if
 
         idx = req.index
         msg_pose = utilities.pose2msg(pmat[idx], Rmat[idx])
@@ -612,6 +712,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
 
     # srv_query_needle_shape_callback
+
     def srv_update_shapetype_callback(self, req: UpdateShapeType.Request, res: UpdateShapeType.Response):
         """ Service to dynamically update the needle shape type at runtime.
 
@@ -677,7 +778,9 @@ def main( args=None ):
     ####End Change
 
     try:
-        rclpy.spin( ssneedle_node )
+        executor = MultiThreadedExecutor()
+        executor.add_node( ssneedle_node )
+        executor.spin()
 
     except KeyboardInterrupt:
         pass
