@@ -44,11 +44,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
     # - optimization options
     PARAM_OPTIMIZER        = ".".join( [ NeedleNode.PARAM_NEEDLE, 'optimizer' ] )
     ####Edit: FIXME: Join parameters need a routing switch based on model/shapetype
-    PARAM_KCINIT           = ".".join( [ PARAM_OPTIMIZER, 'initial_kappa_c' ] ) # initial kappa_c for optimization
-    PARAM_WINIT            = ".".join( [ PARAM_OPTIMIZER, 'initial_w_init' ] )  # initial omega_init for optimization
-    PARAM_OPTIM_MAXITER    = ".".join( [ PARAM_OPTIMIZER, 'max_iterations' ] )
     PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
-    PARAM_OPTIM_MAXITER_LB = 2
     PARAM_INITIAL_INSERTION_POINT = ".".join( [ NeedleNode.PARAM_NEEDLE, 'initial_insertion_point' ] )
 
     # needle pose parameters
@@ -64,9 +60,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         super().__init__( name )
         ####Edit: FIXME: Note -- Keep kc_i/winit_i for now, publish add. params if need be
         self.get_logger().set_level(LoggingSeverity.DEBUG)
-        # declare ang get parameters
-        self.kc_i     = np.array( [ 0.0005 ] )
-        self.w_init_i = np.array( [ self.kc_i[ 0 ], 0.0, 0.0 ] )
 
         ####Change
         self.manual_mode = self.declare_parameter(
@@ -126,12 +119,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.get_logger().info(f"Using default shape type: {self.ss_needle.current_shapetype}")
         ####End Change
 
-        ####Edit: FIXME: May or may not need the below...not sure
-        pd_optim_maxiter = ParameterDescriptor( name=self.PARAM_OPTIM_MAXITER, type=Parameter.Type.INTEGER.value,
-                                                description="Maximum iterations for convergence" )
-        optim_maxiter = self.declare_parameter( pd_optim_maxiter.name, value=15,
-                                                descriptor=pd_optim_maxiter ).get_parameter_value().integer_value
-
         # configure shape-sensing needle
         self.ss_needle._update_orientation_needle_airgap       = self.declare_parameter(
             self.PARAM_UPDATE_ORNT_AIR,
@@ -141,10 +128,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxi[...]
 
-        self.ss_needle.optimizer.options[ 'options' ]          = { 'maxiter': optim_maxiter }
-        self.ss_needle.optimizer.options[ 'w_init_bounds' ][2] = [ -1e-3, 1e-3 ]
-
-        self.ss_needle.ref_wavelengths    = np.ones_like( self.ss_needle.ref_wavelengths )
         self.ss_needle.current_depth      = 0
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
@@ -171,8 +154,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.history_needle_pose = np.reshape([ 0, 0 ], (-1, 1))
 
         # create publishers
-        self.pub_kc    = self.create_publisher( Float64MultiArray, 'state/kappac', 1 )
-        self.pub_winit = self.create_publisher( Float64MultiArray, 'state/winit', 1 )
         self.pub_shape = self.create_publisher( PoseArray, 'state/current_shape', 1 )
         self.pub_depth = self.create_publisher( Float64, 'state/insertion_depth', 1 )
 
