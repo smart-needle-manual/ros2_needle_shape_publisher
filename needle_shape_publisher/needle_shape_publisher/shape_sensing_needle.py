@@ -221,9 +221,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     ####Edit: FIXME: May need to use setters in shell script to make life easier
     def _mark_received(self, slot: str):
-    """Mark an input slot as received and flag inputs as dirty."""
-    self._received.add(slot)
-    self._inputs_dirty = True
+        """Mark an input slot as received and flag inputs as dirty."""
+        self._received.add(slot)
+        self._inputs_dirty = True
 
     @property
     def insertion_depth( self ):
@@ -535,14 +535,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             np.hstack( (self.history_needle_pose, [ [ depth_ds ], [ theta ] ]) )
 
         # else
-        ####Change level 2
-        #if self.entrypoint_received and self.needlepose_received:
-        #    try:
-        #        self.manual_input_timer.cancel()
-        #        self.get_logger().info("Manual inputs complete - canceled manual input timer")
-        #    except Exception:
-        #        pass
-        ####End Change
 
     # sub_needlepose_callback
 
