@@ -86,7 +86,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self._curvature_lock = threading.Lock()
         # no latch needed — curvature source is a launch-time topic remap
 
-        self.get_logger().info(f"Manual mode: {self.manual_mode}")
+        self.get_logger().info(f"Required inputs: {self._required_inputs}")
 
         # Declare and apply the shape type parameter.
         # A value of -1 (the default) means "keep whatever the needle parameter
@@ -220,6 +220,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
     # __init__
 
     ####Edit: FIXME: May need to use setters in shell script to make life easier
+    def _mark_received(self, slot: str):
+    """Mark an input slot as received and flag inputs as dirty."""
+    self._received.add(slot)
+    self._inputs_dirty = True
 
     @property
     def insertion_depth( self ):
@@ -339,19 +343,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
     def publish_shape( self ):
         """ Publish the 3D needle shape"""
         ####Change
-        if self.manual_mode:
-            if not (self.entrypoint_received and self.needlepose_received and self.curvatures_received):
-                self.get_logger().debug(
-                    "Manual mode active --- waiting for entry point, needle pose, and curvature data"
-                )
-                return
-            self.get_logger().debug("Manual data received - computing shape...")
-        else:
-            if not (self.needlepose_received and self.curvatures_received):
-                self.get_logger().debug(
-                    "Waiting for needle pose and curvature data before publishing shape"
-                )
-                return
+        if not self._required_inputs.issubset(self._received):
+            missing = self._required_inputs - self._received
+            self.get_logger().debug(f"Waiting for inputs: {missing}")
+            return
         ####End Change
 
         # Skip optimizer when inputs have not changed since last compute.
@@ -450,10 +445,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             )
 
         ####Change
-        if self.manual_mode:
-            self.entrypoint_received = False
-            self.needlepose_received = False
-            self.get_logger().debug("Shape published — waiting for next manual input.")
         ####End Change
 
     # publish_shape
@@ -468,12 +459,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
     def sub_curvatures_callback( self, msg: Float64MultiArray ):
         """ Subscription to needle sensor curvatures """
         with self._curvature_lock:
-            if self._use_ext_curvatures:
-                return
-            curvatures = np.reshape( msg.data, (2, -1), order='F' )
-            self.ss_needle.current_curvatures = curvatures
-            self.curvatures_received = True
-            self._inputs_dirty = True
+            self.ss_needle.current_curvatures = np.reshape(msg.data, (2, -1), order='F')
+            self._mark_received('curvatures')
 
         self.get_logger().debug(f"Curvatures X: {self.ss_needle.current_curvatures[0]}")
         self.get_logger().debug(f"Curvatures Y: {self.ss_needle.current_curvatures[1]}")
@@ -484,46 +471,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # if
 
     # sub_curvatures_callback
-    def sub_curvatures_ext_callback( self, msg: Float64MultiArray ):
-        """ External curvature feed (e.g. Slicer). Active only while latched on via service. """
-        with self._curvature_lock:
-            if not self._use_ext_curvatures:
-                return
-            curvatures = np.reshape( msg.data, (2, -1), order='F' )
-            self.ss_needle.current_curvatures = curvatures
-            self.curvatures_received = True
-            self._inputs_dirty = True
-
-        self.get_logger().debug(f"[ext] Curvatures X: {self.ss_needle.current_curvatures[0]}")
-        self.get_logger().debug(f"[ext] Curvatures Y: {self.ss_needle.current_curvatures[1]}")
-
-        if not self.ss_needle.is_calibrated:
-            self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
-
-    # sub_curvatures_ext_callback
-
-    def srv_use_ext_curvatures_callback( self, request, response ):
-        """ Latch onto external curvature feed. Call once from Slicer when ready. """
-        with self._curvature_lock:
-            self._use_ext_curvatures = True
-        response.success = True
-        response.message = "Curvature source: external (state/curvatures_in)"
-        self.get_logger().info( response.message )
-        return response
-
-    # srv_use_ext_curvatures_callback
-
-    def srv_use_fbg_curvatures_callback( self, request, response ):
-        """ Revert to FBG pipeline curvatures. """
-        with self._curvature_lock:
-            self._use_ext_curvatures = False
-        response.success = True
-        response.message = "Curvature source: FBG pipeline (state/curvatures)"
-        self.get_logger().info( response.message )
-        return response
-
-    # srv_use_fbg_curvatures_callback
-
 
     def sub_entrypoint_callback( self, msg: Point ):
         """ Subscription to entrypoint topic """
@@ -539,17 +486,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         )
 
         ####Change
-        self.entrypoint_received = True
-        self.get_logger().debug("Received entrypoint data (manual mode flag updated).")
-        ####End Change
-
-        ####Change level 2
-        #if self.entrypoint_received and self.needlepose_received:
-        #    try:
-        #        self.manual_input_timer.cancel()
-        #        self.get_logger().info("Manual inputs complete - canceled manual input timer")
-        #    except Exception:
-        #        pass
+        self._mark_received('entrypoint')
+        self.get_logger().debug("Received entrypoint data.")
         ####End Change
 
         self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
@@ -577,9 +515,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         )
 
         ####Change
-        self.needlepose_received = True
-        self.get_logger().debug("Received needle pose data (manual mode flag updated).")
-        self._inputs_dirty = True
+        self._mark_received('needlepose')
+        self.get_logger().debug("Received needle pose data.")
         ####End Change
 
         self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
@@ -704,21 +641,6 @@ def main( args=None ):
     # Node must be instantiated first so that manual_mode is available as an instance attribute
     ssneedle_node = ShapeSensingNeedleNode()
     ####Change
-    if ssneedle_node.manual_mode:
-        ssneedle_node.get_logger().info(
-            """Manual Mode Instructions (copy/paste):
-    bash -lc '
-      ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}" &
-      ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{
-        header: {frame_id: needle},
-        pose: {
-          position: {x: 0.0, y: 0.0, z: 75.0},
-          orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
-        }
-      }"
-    '
-    """
-        )
     ####End Change
 
     try:
