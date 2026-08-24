@@ -62,19 +62,18 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().set_level(LoggingSeverity.DEBUG)
 
         ####Change
-        self.manual_mode = self.declare_parameter(
-            'needle.manual_mode',
-            value= False
+        require_entrypoint = self.declare_parameter(
+            'needle.require_entrypoint',
+            value=False
         ).get_parameter_value().bool_value
+        
+        self._required_inputs = {'curvatures', 'needlepose'}
+        if require_entrypoint:
+            self._required_inputs.add('entrypoint')
 
-        self.entrypoint_received = False
-        self.needlepose_received = False
-        self.curvatures_received = False
-
-        # Dirty flag: set True by sub_curvatures_callback and sub_needlepose_callback.
-        # publish_shape skips get_needleshape() (the optimizer) when inputs have not
-        # changed since the last successful compute, and serves cached poses instead.
-        self._inputs_dirty = False
+        # Which input slots have been received at least once
+        self._received = set()   # grows as: 'curvatures', 'needlepose', 'entrypoint'
+        self._inputs_dirty = False  # still a bool; set by any input cb, cleared after optimizer
         self._cached_pmat  = None
         self._cached_Rmat  = None
 
@@ -84,8 +83,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self._timer_cbg = MutuallyExclusiveCallbackGroup()
         self._sub_cbg   = ReentrantCallbackGroup()
 
-        self._curvature_lock     = threading.Lock()
-        self._use_ext_curvatures = False  # latched True by service call from Slicer
+        self._curvature_lock = threading.Lock()
+        # no latch needed — curvature source is a launch-time topic remap
 
         self.get_logger().info(f"Manual mode: {self.manual_mode}")
 
@@ -165,13 +164,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             10,
             callback_group=self._sub_cbg,
         )
-        self.sub_curvatures_ext = self.create_subscription(
-            Float64MultiArray,
-            'state/curvatures_in',
-            self.sub_curvatures_ext_callback,
-            10,
-            callback_group=self._sub_cbg,
-        )
         self.sub_entrypoint = self.create_subscription(
             Point,
             'state/skin_entry',
@@ -202,16 +194,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             UpdateShapeType,
             "shapetype/update",
             self.srv_update_shapetype_callback,
-        )
-        self.srv_use_ext_curvatures = self.create_service(
-            Trigger,
-            'curvatures/use_external',
-            self.srv_use_ext_curvatures_callback,
-        )
-        self.srv_use_fbg_curvatures = self.create_service(
-            Trigger,
-            'curvatures/use_fbg',
-            self.srv_use_fbg_curvatures_callback,
         )
 
         # create timers
