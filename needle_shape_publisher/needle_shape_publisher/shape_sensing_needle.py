@@ -266,11 +266,14 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
 
-        self.get_logger().error(
-            f"Shape type {self.ss_needle.current_shapetype} is not supported. "
-            f"Only PIECEWISE_EXP (LIM) is valid in this branch."
-        )
-        return None, None
+        if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
+            pmat, Rmat = self.ss_needle.get_needle_shape()
+        else:
+            self.get_logger().error(
+                f"Shape type {self.ss_needle.current_shapetype} is not supported. "
+                f"Only PIECEWISE_EXP (LIM) is valid in this branch."
+            )
+            return None, None
 
         if (pmat is None) and (Rmat is None):
             return pmat, Rmat
@@ -586,8 +589,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.get_logger().error(res.message)
             return res
  
-         # Keep the ROS parameter in sync so `ros2 param get` reflects reality.
-
         # Keep the ROS parameter in sync so `ros2 param get` reflects reality.
         self.set_parameters([
             Parameter(self.PARAM_NEEDLESHAPE, Parameter.Type.INTEGER, shape_type_int)
