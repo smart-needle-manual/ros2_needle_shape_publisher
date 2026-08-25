@@ -26,8 +26,7 @@ from needle_shape_publisher_interfaces.srv import (
 # needle shape sensing package
 from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDeflection
 
-####Edit: FIXME: SHAPETYPE needs to include LIM, and eventually a separate launch file
-
+# PIECEWISE_EXP (0x40) is the LIM implementation. No additional shapetype needed.
 # current package
 from . import utilities
 from .frame_update import (
@@ -180,16 +179,16 @@ class ShapeSensingNeedleNode( NeedleNode ):
         )
 
         # services
-        self.sub_needleshape_querypt = self.create_service(
-            GetPoseFromPoseArray,
-            "current_shape/query_point",
-            self.srv_needleshape_querypt_callback,
-        )
-        self.sub_needleshape_querypt = self.create_service(
-            GetPoseArray,
-            "current_shape/query",
-            self.srv_needleshape_query_callback,
-        )
+        self.srv_needleshape_querypt = self.create_service(
+             GetPoseFromPoseArray,
+             "current_shape/query_point",
+             self.srv_needleshape_querypt_callback,
+         )
+        self.srv_needleshape_query = self.create_service(
+             GetPoseArray,
+             "current_shape/query",
+             self.srv_needleshape_query_callback,
+         )
         self.srv_update_shapetype = self.create_service(
             UpdateShapeType,
             "shapetype/update",
@@ -267,16 +266,11 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
 
-        ####Edit: FIXME: elif self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM == NEEDLESHAPETYPE.LIM # inverse strain optim + linear interp
-        if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
-            pmat, Rmat = self.ss_needle.get_needle_shape()
-        else:
-            self.get_logger().error( f"Needle shape type: {self.ss_needle.current_shapetype} is not implemented." )
-            self.get_logger().error( f"Resorting to shape type: {NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER}." )
-            self.ss_needle.update_shapetype( NEEDLESHAPETYPE.SINGLEBEND_SINGLELAYER )
-            pmat, Rmat = None, None  # pop out of the loop and redo
-
-        # else
+        self.get_logger().error(
+            f"Shape type {self.ss_needle.current_shapetype} is not supported. "
+            f"Only PIECEWISE_EXP (LIM) is valid in this branch."
+        )
+        return None, None
 
         if (pmat is None) and (Rmat is None):
             return pmat, Rmat
@@ -379,14 +373,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # For PIECEWISE_EXP, current_kc may be a scalar (not iterable) and
         # kc/winit are not used, so skip the cache update to avoid
         # overwriting the cached arrays with an incompatible value.
-        is_piecewise_exp = (
-            (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP)
-            == NEEDLESHAPETYPE.PIECEWISE_EXP
-        )
-        if not is_piecewise_exp:
-            self.kc_i     = self.ss_needle.current_kc
-            self.w_init_i = self.ss_needle.current_winit
-
         # check to make sure messages are not None
 
         if pmat is None or Rmat is None:
@@ -426,26 +412,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
         ####End Change
         self.pub_depth.publish( msg_depth )
-
-        # kappa_c and w_init are not applicable for PIECEWISE_EXP; skip those
-        # topics to avoid a TypeError when current_kc is a scalar.
-        if is_piecewise_exp:
-            self.get_logger().debug(
-                "PIECEWISE_EXP shape type: skipping state/kappac and state/winit publish "
-                "(kappa_c and w_init are not applicable for this shape type)."
-            )
-        else:
-            msg_kc    = Float64MultiArray( data=self.kc_i )
-            msg_winit = Float64MultiArray( data=self.w_init_i.tolist() )
-            self.pub_kc.publish( msg_kc )
-            self.pub_winit.publish( msg_winit )
-            self.get_logger().debug(
-                "Published needle shape, kappa_c and w_init on topics: "
-                f"{self.pub_shape.topic},{self.pub_kc.topic},{self.pub_winit.topic}"
-            )
-
-        ####Change
-        ####End Change
 
     # publish_shape
 
@@ -610,7 +576,17 @@ class ShapeSensingNeedleNode( NeedleNode ):
             return res
 
         old_shapetype = self.ss_needle.current_shapetype
-        self.ss_needle.update_shapetype(new_shapetype)
+        success = self.ss_needle.update_shapetype(new_shapetype)
+        if not success:
+            res.success = False
+            res.message = (
+                f"Shape type {new_shapetype} is not supported by the optimizer "
+                f"(only PIECEWISE_EXP / LIM is valid in this branch)."
+            )
+            self.get_logger().error(res.message)
+            return res
+ 
+         # Keep the ROS parameter in sync so `ros2 param get` reflects reality.
 
         # Keep the ROS parameter in sync so `ros2 param get` reflects reality.
         self.set_parameters([
