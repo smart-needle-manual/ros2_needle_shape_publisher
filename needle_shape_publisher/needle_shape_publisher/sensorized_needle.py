@@ -5,7 +5,7 @@ import rclpy
 from rclpy.parameter import Parameter
 # messages
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension, MultiArrayLayout
-from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+from rcl_interfaces.msg import SetParametersResult
 
 # custom package
 from .sensorized_shape_sensing_needle import NeedleNode
@@ -32,13 +32,8 @@ class SensorizedNeedleNode( NeedleNode ):
     # __init__
 
     def parameters_callback( self, parameters: List[ Parameter ] ):
-        """ Parameter set calllbacks"""
-        PASS
-        # for
-
-        return SetParametersResult( successful=successful, reason="\n".join( reasons ) )
-
-    # parameters_callback
+        """ Parameter set callbacks — no dynamic parameters handled for LIM_only."""
+        return SetParametersResult( successful=True, reason="" )
 
     def publish_curvatures( self ):
         """ Publish the curvatures of the shape-sensing needle"""
