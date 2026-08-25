@@ -27,9 +27,30 @@ class NeedleNode(Node):
     PARAM_AAS = ".".join( [ PARAM_NEEDLE, "activeAreas" ] )  # needle number of active areas
     PARAM_SLOCS = ".".join( [ PARAM_AAS, 'locations' ] )  # needle AA locations from tip of the needle
     PARAM_NEEDLESHAPE = ".".join( (PARAM_NEEDLE, "shape_type") )  # needle shape type
+    PARAM_NEEDLE_FILE = ".".join( [PARAM_NEEDLE, "param_file"] )   # path to needle JSON
 
     def __init__(self, name='Needle'):
         super().__init__(name)
+        # Load needle from JSON file (required parameter)
+        needle_file = self.declare_parameter(
+            self.PARAM_NEEDLE_FILE, value=""
+        ).get_parameter_value().string_value
+
+        if not needle_file:
+            self.get_logger().fatal(
+                f"Parameter '{self.PARAM_NEEDLE_FILE}' is required. "
+                "Provide the path to a needle parameter JSON file."
+            )
+            raise RuntimeError(f"Missing required parameter: {self.PARAM_NEEDLE_FILE}")
+
+        self.get_logger().info(f"Loading needle parameters from: {needle_file}")
+        self.ss_needle: ShapeSensingFBGNeedle = ShapeSensingFBGNeedle.load_json(needle_file)
+        self.get_logger().info(
+            f"Needle loaded: {self.ss_needle.serial_number}, "
+            f"length={self.ss_needle.length} mm, "
+            f"activeAreas={self.ss_needle.num_activeAreas}"
+        )
+
 
         # set (read-only) needle parameters
         pd_ndllen = ParameterDescriptor( name=self.PARAM_NEEDLELENGTH, type=Parameter.Type.DOUBLE.value,
