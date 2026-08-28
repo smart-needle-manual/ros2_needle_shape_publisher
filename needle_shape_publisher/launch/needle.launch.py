@@ -14,11 +14,10 @@ def determineCHsAAs(needleParamFile: str):
     with open(needleParamFile, 'r') as paramFile:
         params = json.load(paramFile) 
 
-    # with
-    numChs = params['# channels']
+    # number of channels is completely unnecessary.
     numAAs = params['# active areas']
 
-    return numChs, numAAs
+    return numAAs
 
 # determineCHsAAs
 
@@ -26,7 +25,8 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     # determine #chs and numAAs
-    numCHs, numAAs = None, None
+    numCHs, numAAs = None
+    # TO-DO: Default needs correction based on number and placement of active areas.
     default_needleparam_file = "3CH-4AA-0005_needle_params_2022-01-26_Jig-Calibration_best_weights.json"
     for arg in sys.argv:
         if arg.startswith("needleParamFile:="):
@@ -35,7 +35,7 @@ def generate_launch_description():
         # if        
     # for 
 
-    if numCHs is None and numAAs is None: # just in-case using default value
+    if numAAs is None: # just in-case using default value
         needleParamFile = default_needleparam_file
 
     # numCHs, numAAs = determineCHsAAs(os.path.join(pkg_needle_shape_publisher, "needle_data", needleParamFile))
@@ -45,14 +45,11 @@ def generate_launch_description():
                                         default_value=default_needleparam_file,
                                         description="The shape-sensing needle parameter json file." )
 
-    arg_numsignals = DeclareLaunchArgument( 'numSignals', description="The number of FBG signals to collect.",
-                                            default_value="200" )
+    # arg_num_signals is deprecated.
 
-    arg_optim_maxiter = DeclareLaunchArgument( 'optimMaxIterations', default_value="15",
-                                               description="The maximum number of iterations for needle shape optimizer." )
-    
-    arg_temp_compensate = DeclareLaunchArgument( 'tempCompensate', default_value="True",
-                                               description="Whether to perform temperature compensation or not." )
+    # arg_optim_maxiter is deprecated.
+
+    # arg_temp_compensate is deprecated.
     
     arg_optim_update_ornt_airgap = DeclareLaunchArgument(
         'optimNeedleUpdateOrientationAirGap',
@@ -61,11 +58,7 @@ def generate_launch_description():
     )
 
     ####Change
-    arg_manual_mode = DeclareLaunchArgument(
-        'manual_mode',
-        default_value='false',
-        description='Enable manual trigger mode for ShapeSensingNeedleNode'
-    )
+    # arg_manual_mode is deprecated.
     arg_shape_type = DeclareLaunchArgument(
         'shape_type',
         default_value='-1',
@@ -83,23 +76,15 @@ def generate_launch_description():
         os.path.join(pkg_needle_shape_publisher, 'sensorized_shapesensing_needle_decomposed.launch.py')),
         launch_arguments = {
             'needleParamFile'                   : PathJoinSubstitution([pkg_needle_shape_publisher, 'needle_data', LaunchConfiguration('needleParamFile')]),
-            'numSignals'                        : LaunchConfiguration('numSignals'),
-            'optimMaxIterations'                : LaunchConfiguration('optimMaxIterations'),
-            'tempCompensate'                    : LaunchConfiguration('tempCompensate'),
             'optimNeedleUpdateOrientationAirGap': LaunchConfiguration('optimNeedleUpdateOrientationAirGap'),
             ####Change
-            'manual_mode'                : LaunchConfiguration('manual_mode'),
             'shape_type'                 : LaunchConfiguration('shape_type'),
             ####End Change
         }.items()
     )
     # configure launch description
     ld.add_action(arg_params)
-    ld.add_action(arg_numsignals)
-    ld.add_action(arg_optim_maxiter)
-    ld.add_action(arg_temp_compensate)
     ld.add_action(arg_optim_update_ornt_airgap)
-    ld.add_action(arg_manual_mode)
     ld.add_action(arg_shape_type)
 
     ld.add_action(ld_needlepub)
