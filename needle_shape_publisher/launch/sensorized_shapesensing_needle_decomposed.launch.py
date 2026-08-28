@@ -10,12 +10,6 @@ def generate_launch_description():
     # arguments
     arg_needleparam = DeclareLaunchArgument( 'needleParamFile',
                                              description="The shape-sensing needle parameter json file." )
-    arg_numsignals = DeclareLaunchArgument( 'numSignals', description="The number of FBG signals to collect.",
-                                            default_value="200" )
-    arg_optim_maxiter = DeclareLaunchArgument( 'optimMaxIterations', default_value="15",
-                                               description="The maximum number of iterations for needle shape optimizer." )
-    arg_temp_compensate = DeclareLaunchArgument( 'tempCompensate', default_value="True",
-                                               description="Whether to perform temperature compensation or not." )
     
     arg_optim_update_ornt_airgap = DeclareLaunchArgument(
         'optimNeedleUpdateOrientationAirGap',
@@ -24,11 +18,6 @@ def generate_launch_description():
     )
 
     ####Change
-    arg_manual_mode = DeclareLaunchArgument(
-        'manual_mode',
-        default_value='false',
-        description='Enable manual trigger mode for ShapeSensingNeedle node'
-    )
     arg_shape_type = DeclareLaunchArgument(
         'shape_type',
         default_value='-1',
@@ -49,8 +38,6 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[ {
                     'needle.paramFile'                   : LaunchConfiguration( 'needleParamFile' ),
-                    'needle.sensor.numberSignals'        : LaunchConfiguration( 'numSignals' ),
-                    'needle.sensor.temperatureCompensate': LaunchConfiguration( 'tempCompensate' ),
                     } ]
             )
     node_ssneedle = Node(
@@ -61,10 +48,7 @@ def generate_launch_description():
             emulate_tty=True,
             parameters=[{
                 'needle.paramFile'                               : LaunchConfiguration( 'needleParamFile' ),
-                'needle.optimizer.max_iterations'                : LaunchConfiguration( 'optimMaxIterations' ),
-                'needle.optimizer.update_orientation_with_airgap': LaunchConfiguration( 'optimNeedleUpdateOrientationAirGap' ),
                 ####Change
-                'needle.manual_mode'                             : LaunchConfiguration('manual_mode'),
                 'needle.shape_type'                              : LaunchConfiguration('shape_type'),
                 ####End Change
                 # Skin-entry insertion point [x, y, z] in mm.
@@ -77,11 +61,7 @@ def generate_launch_description():
 
     # add to launch description
     ld.add_action( arg_needleparam )
-    ld.add_action( arg_numsignals )
-    ld.add_action( arg_optim_maxiter )
-    ld.add_action( arg_temp_compensate )
     ld.add_action( arg_optim_update_ornt_airgap )
-    ld.add_action( arg_manual_mode )
     ld.add_action( arg_shape_type )
 
     ld.add_action( node_sensorizedneedle )
