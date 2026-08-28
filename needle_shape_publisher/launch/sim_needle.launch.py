@@ -14,7 +14,7 @@ from launch.substitutions import (
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
-pkg_hyperion_interrogator = get_package_share_directory('hyperion_interrogator')
+# The control flow will be self-contained. Everything happens in ros2_needle_shape_publisher/needle_shape_publisher.
 pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher')
 
 
@@ -39,26 +39,16 @@ def generate_launch_description():
             numCHs, numAAs = determineCHsAAs(needleParamFile)
 
     # Arguments
-    arg_simlevel = DeclareLaunchArgument(
-        'sim_level',
-        default_value='1',
-        description='Simulation level: 1 - shape-driven virtual sensors, 2 - real sensors'
-    )
+    # There will only be simulated readings in this branch.
+    # json needs to be written and updated in accordance with active area placements.
     arg_params = DeclareLaunchArgument(
         'needleParamFile',
         default_value='3CH-4AA-0005_needle_params_2022-01-26_Jig-Calibration_best_weights.json',
         description='The shape-sensing needle parameter json file'
     )
-    arg_interrIP = DeclareLaunchArgument(
-        'interrogatorIP',
-        default_value='10.0.0.55',
-        description='Interrogator IP'
-    )
-    arg_manual_mode = DeclareLaunchArgument(
-        'manual_mode',
-        default_value='false',
-        description='Enable manual trigger mode for ShapeSensingNeedleNode'
-    )
+    # An interrogator IP is no longer needed as the computer is completely ineffectual in simulation.
+    # manual_mode is deprecated. Topics will be published to directly.
+    # shape_type will be corrected TO-DO: auto-assign to piecewise_exp shape type
     arg_shape_type = DeclareLaunchArgument(
         'shape_type',
         default_value='-1',
@@ -68,135 +58,28 @@ def generate_launch_description():
             '-1 means use the value from the needle parameter file).'
         )
     )
-    # Shape file for sim_level=1 shape-driven simulation
-    arg_sim_shape_file = DeclareLaunchArgument(
-        'sim_shape_file',
-        default_value=PathJoinSubstitution([
-            pkg_needle_shape_publisher, 'needle_data', 'sim_shape_default.yaml'
-        ]),
-        description=(
-            'Path to YAML/JSON shape file used by sim_level=1 to generate '
-            'shape-driven FBG wavelength shifts. '
-            'Format: {shape: [[x0,y0,z0], [x1,y1,z1], ...]} (mm).'
-        )
-    )
-    # Insertion depth used when computing curvatures from the shape file
-    arg_sim_insertion_depth = DeclareLaunchArgument(
-        'sim_insertion_depth',
-        default_value='100.0',
-        description=(
-            'Current insertion depth (mm) used together with the shape file '
-            'to locate sensor active areas along the polyline.'
-        )
-    )
-
-    num_signals_to_collect = 50
+    # 3D Slicer will provide the needed topics directly following post-processing.
+    
+    # num_signals_to_collect will be phased out; topics will be bagged until info needed provided, then the publisher will trigger. Else, at speed, info stored is not info calculated.
 
     # Needle shape publisher
+    # Temperature compensation is deprecated for simulation.
     ld_needlepub = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_needle_shape_publisher, 'needle.launch.py')),
         launch_arguments={
             'needleParamFile': LaunchConfiguration(arg_params.name),
-            'numSignals': TextSubstitution(text=str(num_signals_to_collect)),
             'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
-            'manual_mode': LaunchConfiguration('manual_mode'),
             'shape_type': LaunchConfiguration('shape_type'),
-            'tempCompensate': TextSubstitution(text='False'),
         }.items()
     )
 
-    # Hyperion Interrogator – shape-driven virtual demo (sim_level=1)
-    ld_hyperiondemo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_hyperion_interrogator, 'hyperion_demo.launch.py')),
-        condition=conditions.IfCondition(
-            PythonExpression([LaunchConfiguration('sim_level'), ' == 1'])
-        ),
-        launch_arguments={
-            'ip': LaunchConfiguration('interrogatorIP'),
-            'numCH': TextSubstitution(text=str(numCHs)),
-            'numAA': TextSubstitution(text=str(numAAs)),
-            'numSamples': TextSubstitution(text=str(num_signals_to_collect)),
-            'needleParamFile': PathJoinSubstitution([
-                pkg_needle_shape_publisher, 'needle_data',
-                LaunchConfiguration(arg_params.name)
-            ]),
-            'sim_shape_file': LaunchConfiguration('sim_shape_file'),
-            'sim_insertion_depth': LaunchConfiguration('sim_insertion_depth'),
-        }.items()
-    )
-
-    ld_hyperionstream = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_hyperion_interrogator, 'hyperion_streamer.launch.py')),
-        condition=conditions.IfCondition(
-            PythonExpression([LaunchConfiguration('sim_level'), ' == 2'])
-        ),
-        launch_arguments={
-            'ip': LaunchConfiguration('interrogatorIP'),
-            'numSamples': TextSubstitution(text=str(num_signals_to_collect)),
-            'needleParamFile': PathJoinSubstitution([
-                pkg_needle_shape_publisher, 'needle_data',
-                LaunchConfiguration(arg_params.name)
-            ]),
-        }.items()
-    )
+    # Hyperion Interrogator is deprecated for simulation.
 
     # Add to launch description
-    ld.add_action(arg_simlevel)
     ld.add_action(arg_params)
-    ld.add_action(arg_interrIP)
-    ld.add_action(arg_manual_mode)
     ld.add_action(arg_shape_type)
-    ld.add_action(arg_sim_shape_file)
-    ld.add_action(arg_sim_insertion_depth)
 
     ld.add_action(ld_needlepub)
-    ld.add_action(ld_hyperiondemo)
-    ld.add_action(ld_hyperionstream)
-
-    # ---------------------------------------------------------------------------
-    # Sim-only helpers: publish the two topics that ShapeSensingNeedleNode needs
-    # ---------------------------------------------------------------------------
-
-    # One-shot seed: gives ShapeSensingNeedleNode a valid needle_pose at boot
-    # so needlepose_received=True before Slicer connects. Exits immediately.
-    # Slicer (ShapeCall) now publishes directly to /stage/state/needle_pose —
-    # no TopicRepeater relay needed.
-    needle_pose_seed = ExecuteProcess(
-        cmd=[
-            'ros2', 'topic', 'pub', '--once',
-            '/stage/state/needle_pose',
-            'geometry_msgs/msg/PoseStamped',
-            [
-                '{"header": {"frame_id": "needle"}, '
-                '"pose": {"position": {"x": 0.0, "y": 0.0, "z": ',
-                LaunchConfiguration('sim_insertion_depth'),
-                '}, "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}}',
-            ],
-        ],
-        output='screen',
-    )
-
-    # Auto-call the sensor calibrate service so that /needle/sensor/processed
-    # starts flowing without manual intervention.
-    calibrate_service_call = TimerAction(
-        period=5.0,
-        actions=[
-            ExecuteProcess(
-                cmd=[
-                    'ros2', 'service', 'call',
-                    '/needle/sensor/calibrate',
-                    'std_srvs/srv/Trigger',
-                    '{}',
-                ],
-                output='screen',
-            ),
-        ],
-    )
-
-    ld.add_action(needle_pose_seed)
-    ld.add_action(calibrate_service_call)
 
     return ld
