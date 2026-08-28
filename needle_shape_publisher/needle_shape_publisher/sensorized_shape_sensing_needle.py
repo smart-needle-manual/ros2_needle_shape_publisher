@@ -46,7 +46,6 @@ class NeedleNode(Node):
         self.get_logger().info(f"Loading needle parameters from: {needle_file}")
         self.ss_needle: ShapeSensingFBGNeedle = ShapeSensingFBGNeedle.load_json(needle_file)
         self.get_logger().info(
-            f"Needle loaded: {self.ss_needle.serial_number}, "
             f"length={self.ss_needle.length} mm, "
             f"activeAreas={self.ss_needle.num_activeAreas}"
         )
@@ -69,12 +68,12 @@ class NeedleNode(Node):
 
         # Declare a log_level parameter for runtime verbosity control
         log_level_str = self.declare_parameter(
-            "log_level", "INFO"
+            "log_level", "DEBUG"
         ).get_parameter_value().string_value
         log_level = getattr(
             rclpy.logging.LoggingSeverity,
             log_level_str.upper(),
-            rclpy.logging.LoggingSeverity.INFO,
+            rclpy.logging.LoggingSeverity.DEBUG,
         )
         self.get_logger().set_level(log_level)
 
@@ -94,7 +93,7 @@ class NeedleNode(Node):
 def main( args=None ):
     rclpy.init( args=args )
 
-    ssneedle_node = SensorizedShapeSensingNeedleNode()
+    ssneedle_node = NeedleNode()
 
     try:
         rclpy.spin( ssneedle_node )
