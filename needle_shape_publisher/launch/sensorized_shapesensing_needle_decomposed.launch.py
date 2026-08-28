@@ -30,16 +30,7 @@ def generate_launch_description():
     ####End Change
 
     # Nodes
-    node_sensorizedneedle = Node(
-            package='needle_shape_publisher',
-            namespace='needle',
-            executable='sensorized_needle',
-            output='screen',
-            emulate_tty=True,
-            parameters=[ {
-                    'needle.paramFile'                   : LaunchConfiguration( 'needleParamFile' ),
-                    } ]
-            )
+    # node_sensorizedneedle is deprecated - node_ssnneedle will eceive the curvatures in ravel-order directly, back from tip to base.
     node_ssneedle = Node(
             package='needle_shape_publisher',
             namespace='needle',
@@ -64,7 +55,6 @@ def generate_launch_description():
     ld.add_action( arg_optim_update_ornt_airgap )
     ld.add_action( arg_shape_type )
 
-    ld.add_action( node_sensorizedneedle )
     ld.add_action( node_ssneedle )
 
     return ld
