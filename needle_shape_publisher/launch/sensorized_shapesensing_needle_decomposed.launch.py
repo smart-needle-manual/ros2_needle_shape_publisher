@@ -42,11 +42,10 @@ def generate_launch_description():
                 ####Change
                 'needle.shape_type'                              : LaunchConfiguration('shape_type'),
                 ####End Change
-                # Skin-entry insertion point [x, y, z] in mm.
-                # Override on the command line with:
+                # Skin-entry will be viewed only from the lens of insertion depth in the absence of a stator.
+                # Any new inserted args should be overriden on the command line with:
                 #   ros2 param set /needle/shapesensing_needle \
-                #       needle.initial_insertion_point [x,y,z]
-                'needle.initial_insertion_point'                 : [ 0.0, 0.0, 0.0 ],
+                #       {name} [value]
             }],
         )
 
