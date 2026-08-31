@@ -68,7 +68,6 @@ def generate_launch_description():
             os.path.join(pkg_needle_shape_publisher, 'needle.launch.py')),
         launch_arguments={
             'needleParamFile': LaunchConfiguration(arg_params.name),
-            'optimNeedleUpdateOrientationAirGap': TextSubstitution(text='False'),
             'shape_type': LaunchConfiguration('shape_type'),
         }.items()
     )
