@@ -29,11 +29,6 @@ from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDef
 # PIECEWISE_EXP (0x40) is the LIM implementation. No additional shapetype needed.
 # current package
 from . import utilities
-from .frame_update import (
-    insertion_point_from_stage_pose,
-    stage_pose_translation,
-    transform_shape,
-)
 from .sensorized_shape_sensing_needle import NeedleNode
 
 
@@ -42,7 +37,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # - optimization options
     PARAM_OPTIMIZER        = ".".join( [ NeedleNode.PARAM_NEEDLE, 'optimizer' ] )
-    ####Edit: FIXME: Join parameters need a routing switch based on model/shapetype
     PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
 
     # needle pose parameters
@@ -60,14 +54,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().set_level(LoggingSeverity.DEBUG)
 
         ####Change
-        require_entrypoint = self.declare_parameter(
-            'needle.require_entrypoint',
-            value=False
-        ).get_parameter_value().bool_value
         
-        self._required_inputs = {'curvatures', 'needlepose'}
-        if require_entrypoint:
-            self._required_inputs.add('entrypoint')
+        self._required_inputs = {'curvatures', 'needlepose', 'insertion_depth'}
 
         # Which input slots have been received at least once
         self._received = set()   # grows as: 'curvatures', 'needlepose', 'entrypoint'
@@ -127,47 +115,18 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
 
-        # Initialise insertion point from a ROS parameter so the sim (and any
-        # launch file) can set a valid value without needing a subscriber message
-        # on /needle/state/skin_entry.  Defaults to the origin [0, 0, 0].
-        pd_init_ins_pt = ParameterDescriptor(
-            name=self.PARAM_INITIAL_INSERTION_POINT,
-            type=Parameter.Type.DOUBLE_ARRAY.value,
-            description="Initial skin-entry insertion point [x, y, z] in mm (world frame).",
-        )
-        init_insertion_point = self.declare_parameter(
-            pd_init_ins_pt.name,
-            descriptor=pd_init_ins_pt,
-            value=[ 0.0, 0.0, 0.0 ],
-        ).get_parameter_value().double_array_value
-        self.ss_needle.insertion_point = np.array( list( init_insertion_point ) )
-
         # configure current needle pose parameters - insertion depth mod ds, theta rotation (rads)
         self.current_needle_pose = (np.zeros( 3 ), self.R_NEEDLEPOSE)
 
         # create publishers
         self.pub_shape = self.create_publisher( PoseArray, 'state/current_shape', 1 )
-        self.pub_depth = self.create_publisher( Float64, 'state/insertion_depth', 1 )
+        #self.pub_depth = self.create_publisher( Float64, 'state/insertion_depth', 1 )
 
         # create subscriptions
         self.sub_curvatures = self.create_subscription(
             Float64MultiArray,
             'state/curvatures',
             self.sub_curvatures_callback,
-            10,
-            callback_group=self._sub_cbg,
-        )
-        self.sub_entrypoint = self.create_subscription(
-            Point,
-            'state/skin_entry',
-            self.sub_entrypoint_callback,
-            10,
-            callback_group=self._sub_cbg,
-        )
-        self.sub_needlepose = self.create_subscription(
-            PoseStamped,
-            '/stage/state/needle_pose',
-            self.sub_needlepose_callback,
             10,
             callback_group=self._sub_cbg,
         )
@@ -229,12 +188,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.ss_needle.current_depth = depth
 
     # insertion_depth setter
-
-    @property
-    def needle_guide_exit_pt(self):
-        return stage_pose_translation(self.current_needle_pose[0])
-
-    # needle_guide_exit_pt
 
     def __transform( self, pmat: np.ndarray, Rmat: np.ndarray ):
         """ Transforms the needle pose of an N-D array using the current needle pose
@@ -434,72 +387,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # if
 
     # sub_curvatures_callback
-
-    def sub_entrypoint_callback( self, msg: Point ):
-        """ Subscription to entrypoint topic """
-        # skin_entry is assumed to be in the needle/world frame (needle frame == world frame)
-        insertion_point = np.array( [ msg.x, msg.y, msg.z ] )
-
-        # The stage pose carries lateral guide offsets in x/y and insertion depth
-        # in z.  Keep the z component in the needle frame so the downstream shape
-        # model can use it as the air-gap / entry depth along the insertion axis.
-        self.ss_needle.insertion_point = insertion_point_from_stage_pose(
-            insertion_point,
-            self.current_needle_pose[0],
-        )
-
-        ####Change
-        self._mark_received('entrypoint')
-        self.get_logger().debug("Received entrypoint data.")
-        ####End Change
-
-        self.get_logger().debug(f"Current insertion point rel. to needle base = {self.ss_needle.insertion_point}")
-
-    # sub_entrypoint_callback
-
-    def sub_needlepose_callback( self, msg: PoseStamped ):
-        """ Subscription to entrypoint topic """
-        self.current_needle_pose      = list( utilities.msg2pose( msg.pose ) )
-        self.current_needle_pose[ 0 ] = self.current_needle_pose[ 0 ]
-        self.get_logger().debug( f"NeedlePoseCB: pose[0]: {self.current_needle_pose[ 0 ]}" )
-        self.get_logger().debug( f"NeedlePoseCB: pose[1]: {self.current_needle_pose[ 1 ]}" )
-
-        self.current_needle_pose[ 1 ] = self.current_needle_pose[ 1 ] @ self.R_NEEDLEPOSE  # update current needle pose
-
-        # update the insertion depth along the z-axis (stage z-axis == insertion axis).
-        # Assumes stage z=0 when the needle tip is exactly at the skin surface,
-        # so depth = needle_base_z - skin_entry_z gives depth into tissue.
-        self.insertion_depth = max(
-            0,
-            min(
-                self.current_needle_pose[0][2] - self.ss_needle.insertion_point[2], # z-axis
-                self.ss_needle.length
-            )
-        )
-
-        ####Change
-        self._mark_received('needlepose')
-        self.get_logger().debug("Received needle pose data.")
-        ####End Change
-
-        self.get_logger().debug( f"Current insertion depth: {self.insertion_depth}" )
-
-        # update the history of orientations (NOT USED YET)
-        # Uses raw stage z (not depth into tissue); valid only when stage z=0 at skin contact.
-        depth_ds = msg.pose.position.z - msg.pose.position.z % self.ss_needle.ds
-        theta    = msg.pose.orientation.z
-        if np.any( self.history_needle_pose[ 0 ] == depth_ds ):  # check if we already have this value
-            idx = np.argwhere( self.history_needle_pose[ 0 ] == depth_ds ).ravel()
-            self.history_needle_pose[ 1, idx ] = theta
-
-        # if
-
-        else:  # add a new value
-            np.hstack( (self.history_needle_pose, [ [ depth_ds ], [ theta ] ]) )
-
-        # else
-
-    # sub_needlepose_callback
 
     def srv_needleshape_query_callback(self, req: GetPoseArray.Request, res: GetPoseArray.Response):
         """ Query the current needle shape """
