@@ -50,12 +50,8 @@ def generate_launch_description():
     # arg_optim_maxiter is deprecated.
 
     # arg_temp_compensate is deprecated.
-    
-    arg_optim_update_ornt_airgap = DeclareLaunchArgument(
-        'optimNeedleUpdateOrientationAirGap',
-        default_value="True",
-        description="Whether to update the needle's tissue orientation based on estimated air gap orientation",
-    )
+
+    # updateNeedleOrientationAirGap is deprecated.
 
     ####Change
     # arg_manual_mode is deprecated.
@@ -76,7 +72,6 @@ def generate_launch_description():
         os.path.join(pkg_needle_shape_publisher, 'sensorized_shapesensing_needle_decomposed.launch.py')),
         launch_arguments = {
             'needleParamFile'                   : PathJoinSubstitution([pkg_needle_shape_publisher, 'needle_data', LaunchConfiguration('needleParamFile')]),
-            'optimNeedleUpdateOrientationAirGap': LaunchConfiguration('optimNeedleUpdateOrientationAirGap'),
             ####Change
             'shape_type'                 : LaunchConfiguration('shape_type'),
             ####End Change
@@ -84,7 +79,6 @@ def generate_launch_description():
     )
     # configure launch description
     ld.add_action(arg_params)
-    ld.add_action(arg_optim_update_ornt_airgap)
     ld.add_action(arg_shape_type)
 
     ld.add_action(ld_needlepub)
