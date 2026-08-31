@@ -14,7 +14,6 @@ from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 # services
 
 # custom package
-from needle_shape_sensing import geometry
 from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE
 from needle_shape_sensing.shape_sensing import ShapeSensingFBGNeedle
 
