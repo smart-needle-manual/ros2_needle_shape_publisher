@@ -12,6 +12,7 @@ import threading
 
 # messages
 from geometry_msgs.msg import PoseArray, Point, PoseStamped
+from geometry_msgs.msg import Float64MultiArray # flat 3x3 (row-major 9-element object) alternative to QuaternionStamped, with quaternions generally not explicitly used here as such
 from rcl_interfaces.msg import ParameterDescriptor
 from std_msgs.msg import Float64MultiArray, Header, Float64
 
@@ -55,7 +56,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         ####Change
         
-        self._required_inputs = {'curvatures', 'needlepose', 'insertion_depth'}
+        self._required_inputs = {'curvatures', 'insertion_depth', 'R_init'}
 
         # Which input slots have been received at least once
         self._received = set()   # grows as: 'curvatures', 'needlepose', 'entrypoint'
@@ -117,6 +118,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # configure current needle pose parameters - insertion depth mod ds, theta rotation (rads)
         self.current_needle_pose = (np.zeros( 3 ), self.R_NEEDLEPOSE)
+        self._R_init = np.eye(3)   # initial orientation; updated by sub_R_init_callback
+        self._R_init_lock = threading.Lock()
 
         # create publishers
         self.pub_shape = self.create_publisher( PoseArray, 'state/current_shape', 1 )
@@ -127,6 +130,14 @@ class ShapeSensingNeedleNode( NeedleNode ):
             Float64MultiArray,
             'state/curvatures',
             self.sub_curvatures_callback,
+            10,
+            callback_group=self._sub_cbg,
+        )
+
+        self.sub_R_init = self.create_subscription(
+            Float64MultiArray,
+            'state/R_init',
+            self.sub_R_init_callback,
             10,
             callback_group=self._sub_cbg,
         )
@@ -212,6 +223,9 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug(f"Current shapetype: {self.ss_needle.current_shapetype}")
         self.get_logger().debug(f"num_ActiveAreas: {self.ss_needle.num_activeAreas}")
         ####End Change
+
+        with self._R_init_lock:
+            R_init = self._R_init.copy()
 
         if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
             pmat, Rmat = self.ss_needle.get_needle_shape()
@@ -387,6 +401,12 @@ class ShapeSensingNeedleNode( NeedleNode ):
         # if
 
     # sub_curvatures_callback
+
+    def sub_R_init_callback(self, msg: Float64MultiArray):
+        """Receive the initial orientation matrix (9 floats, row-major 3×3)."""
+        with self._R_init_lock:
+            self._R_init = np.array(msg.data, dtype=float).reshape(3, 3)
+            self._mark_received('R_init')
 
     def srv_needleshape_query_callback(self, req: GetPoseArray.Request, res: GetPoseArray.Response):
         """ Query the current needle shape """
