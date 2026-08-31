@@ -32,7 +32,7 @@ def generate_launch_description():
             output='screen',
             emulate_tty=True,
             parameters=[{
-                'needle.paramFile'                               : LaunchConfiguration( 'needleParamFile' ),
+                'needle.param_file'                               : LaunchConfiguration( 'needleParamFile' ),
                 ####Change
                 'needle.shape_type'                              : LaunchConfiguration('shape_type'),
                 ####End Change
