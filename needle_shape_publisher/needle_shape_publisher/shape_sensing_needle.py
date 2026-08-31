@@ -11,9 +11,8 @@ from rclpy.executors import MultiThreadedExecutor
 import threading
 
 # messages
-from geometry_msgs.msg import PoseArray, Point, PoseStamped
-from geometry_msgs.msg import Float64MultiArray # flat 3x3 (row-major 9-element object) alternative to QuaternionStamped, with quaternions generally not explicitly used here as such
-from rcl_interfaces.msg import ParameterDescriptor
+from geometry_msgs.msg import PoseArray
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from std_msgs.msg import Float64MultiArray, Header, Float64
 
 from std_srvs.srv import Trigger
@@ -39,6 +38,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
     # - optimization options
     PARAM_OPTIMIZER        = ".".join( [ NeedleNode.PARAM_NEEDLE, 'optimizer' ] )
     PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
+    PARAM_R_INIT = ".".join([NeedleNode.PARAM_NEEDLE, 'R_init'])
 
     # needle pose parameters
     # R_NEEDLEPOSE = geometry.rotx( -np.pi / 2 )  # +z-axis -> +y-axis
@@ -47,7 +47,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
     #                            [ 0, 1, 0 ] ] )
     # The needle frame is assumed to be the world frame, and the stage z-axis is
     # assumed to be aligned with the needle insertion axis, so no rotation is needed.
-    R_NEEDLEPOSE = np.eye(3)
 
     def __init__( self, name="ShapeSensingNeedle" ):
         super().__init__( name )
@@ -59,7 +58,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self._required_inputs = {'curvatures', 'insertion_depth', 'R_init'}
 
         # Which input slots have been received at least once
-        self._received = set()   # grows as: 'curvatures', 'needlepose', 'entrypoint'
+        self._received = set()   # grows as: 'curvatures', 'insertion_depth'; 'R_init' pre-seeded from parameter
         self._inputs_dirty = False  # still a bool; set by any input cb, cleared after optimizer
         self._cached_pmat  = None
         self._cached_Rmat  = None
@@ -105,6 +104,22 @@ class ShapeSensingNeedleNode( NeedleNode ):
             self.get_logger().info(f"Using default shape type: {self.ss_needle.current_shapetype}")
         ####End Change
 
+        # R_init: initial needle orientation (row-major 3×3, 9 floats). Default = eye(3).
+        # Set at runtime with:
+        #   ros2 param set /needle needle.R_init "[1,0,0, 0,1,0, 0,0,1]"
+        PARAM_R_INIT = ".".join([NeedleNode.PARAM_NEEDLE, 'R_init'])
+        r_init_flat = self.declare_parameter(
+            PARAM_R_INIT,
+            value=[1.,0.,0., 0.,1.,0., 0.,0.,1.],
+            descriptor=ParameterDescriptor(
+                type=Parameter.Type.DOUBLE_ARRAY.value,
+                description='Initial needle orientation as a row-major 3×3 rotation matrix (9 floats).',
+            ),
+        ).get_parameter_value().double_array_value
+        self._R_init = np.array(r_init_flat, dtype=float).reshape(3, 3)
+        self._received.add('R_init')   # eye(3) default is always valid; unblock startup
+        self.add_on_set_parameters_callback(self._on_set_parameters) 
+
         # configure shape-sensing needle
         self.ss_needle._update_orientation_needle_airgap       = self.declare_parameter(
             self.PARAM_UPDATE_ORNT_AIR,
@@ -118,7 +133,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
 
         # configure current needle pose parameters - insertion depth mod ds, theta rotation (rads)
-        self.current_needle_pose = (np.zeros( 3 ), self.R_NEEDLEPOSE)
         self._R_init = np.eye(3)   # initial orientation; updated by sub_R_init_callback
         self._R_init_lock = threading.Lock()
 
@@ -130,14 +144,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             Float64MultiArray,
             'state/curvatures',
             self.sub_curvatures_callback,
-            10,
-            callback_group=self._sub_cbg,
-        )
-
-        self.sub_R_init = self.create_subscription(
-            Float64MultiArray,
-            'state/R_init',
-            self.sub_R_init_callback,
             10,
             callback_group=self._sub_cbg,
         )
@@ -207,7 +213,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             R_init = self._R_init.copy()
 
         if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
-            pmat, Rmat = self.ss_needle.get_needle_shape(R_init)
+            pmat, Rmat = self.ss_needle.get_needle_shape(R_init=R_init)
         else:
             self.get_logger().error(
                 f"Shape type {self.ss_needle.current_shapetype} is not supported. "
@@ -373,11 +379,21 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # sub_curvatures_callback
 
-    def sub_R_init_callback(self, msg: Float64MultiArray):
-        """Receive the initial orientation matrix (9 floats, row-major 3×3)."""
-        with self._R_init_lock:
-            self._R_init = np.array(msg.data, dtype=float).reshape(3, 3)
-            self._mark_received('R_init')
+    def _on_set_parameters(self, params):
+        """Handle dynamic parameter updates."""
+        for p in params:
+            if p.name == self.PARAM_R_INIT and p.type_ == Parameter.Type.DOUBLE_ARRAY:
+                if len(p.value) != 9:
+                    self.get_logger().error(
+                        f"needle.R_init must have 9 elements (got {len(p.value)}); ignoring."
+                    )
+                    return SetParametersResult(successful=False,
+                                               reason="R_init must be 9 floats (row-major 3×3)")
+                with self._R_init_lock:
+                    self._R_init = np.array(p.value, dtype=float).reshape(3, 3)
+                self._mark_received('R_init')
+                self.get_logger().info(f"R_init updated:\n{self._R_init}")
+        return SetParametersResult(successful=True)
     def sub_insertion_depth_callback(self, msg: Float64):
         with self._depth_lock:
             self.insertion_depth = msg.data
