@@ -37,7 +37,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # - optimization options
     PARAM_OPTIMIZER        = ".".join( [ NeedleNode.PARAM_NEEDLE, 'optimizer' ] )
-    PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
     PARAM_R_INIT = ".".join([NeedleNode.PARAM_NEEDLE, 'R_init'])
 
     # needle pose parameters
