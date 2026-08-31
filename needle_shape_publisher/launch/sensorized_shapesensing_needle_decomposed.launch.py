@@ -10,12 +10,6 @@ def generate_launch_description():
     # arguments
     arg_needleparam = DeclareLaunchArgument( 'needleParamFile',
                                              description="The shape-sensing needle parameter json file." )
-    
-    arg_optim_update_ornt_airgap = DeclareLaunchArgument(
-        'optimNeedleUpdateOrientationAirGap',
-        default_value="True",
-        description="Whether to update the needle's tissue orientation based on estimated air gap orientation",
-    )
 
     ####Change
     arg_shape_type = DeclareLaunchArgument(
@@ -51,7 +45,6 @@ def generate_launch_description():
 
     # add to launch description
     ld.add_action( arg_needleparam )
-    ld.add_action( arg_optim_update_ornt_airgap )
     ld.add_action( arg_shape_type )
 
     ld.add_action( node_ssneedle )
