@@ -44,7 +44,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
     PARAM_OPTIMIZER        = ".".join( [ NeedleNode.PARAM_NEEDLE, 'optimizer' ] )
     ####Edit: FIXME: Join parameters need a routing switch based on model/shapetype
     PARAM_UPDATE_ORNT_AIR  = ".".join( [ PARAM_OPTIMIZER, 'update_orientation_with_airgap'] )
-    PARAM_INITIAL_INSERTION_POINT = ".".join( [ NeedleNode.PARAM_NEEDLE, 'initial_insertion_point' ] )
 
     # needle pose parameters
     # R_NEEDLEPOSE = geometry.rotx( -np.pi / 2 )  # +z-axis -> +y-axis
@@ -124,8 +123,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
         ).get_parameter_value().bool_value
 
-        ####Edit: FIXME: self.ss_needle.optimizer needs to account for the new method, and eventually such optimizer checks may need to be removed. Parameters like maxiter--are they correct? Maxi[...]
-
         self.ss_needle.current_depth      = 0
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
@@ -145,11 +142,8 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ).get_parameter_value().double_array_value
         self.ss_needle.insertion_point = np.array( list( init_insertion_point ) )
 
-        # configure current needle pose parameters
+        # configure current needle pose parameters - insertion depth mod ds, theta rotation (rads)
         self.current_needle_pose = (np.zeros( 3 ), self.R_NEEDLEPOSE)
-
-        # - look-up table of (insertion depth (mod ds), theta rotation (rads))
-        self.history_needle_pose = np.reshape([ 0, 0 ], (-1, 1))
 
         # create publishers
         self.pub_shape = self.create_publisher( PoseArray, 'state/current_shape', 1 )
