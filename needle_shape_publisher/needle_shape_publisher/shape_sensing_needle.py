@@ -24,9 +24,9 @@ from needle_shape_publisher_interfaces.srv import (
 )
 
 # needle shape sensing package
-from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE, AirDeflection
+from needle_shape_sensing.intrinsics import SHAPETYPE as NEEDLESHAPETYPE
 
-# PIECEWISE_EXP (0x40) is the LIM implementation. No additional shapetype needed.
+# LIM_SO3 (0x40) is the LIM implementation.
 # current package
 from . import utilities
 from .sensorized_shape_sensing_needle import NeedleNode
