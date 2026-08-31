@@ -124,8 +124,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
         # create publishers
         self.pub_shape = self.create_publisher( PoseArray, 'state/current_shape', 1 )
-        #self.pub_depth = self.create_publisher( Float64, 'state/insertion_depth', 1 )
-
+        
         # create subscriptions
         self.sub_curvatures = self.create_subscription(
             Float64MultiArray,
@@ -174,19 +173,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
             0.05, self.publish_shape,
             callback_group=self._timer_cbg,  # isolated: optimizer never blocks subs
         )
-        # NOTE: In `needle.manual_mode`, `publish_shape()` will only compute/publish
-        # once BOTH `/needle/state/skin_entry` (geometry_msgs/msg/Point) and
-        # `/stage/state/needle_pose` (geometry_msgs/msg/PoseStamped) have been received.
-        #
-        # For manual teleop/testing, you typically want to publish these two topics
-        # continuously (or at least back-to-back) and include `header.frame_id` in
-        # the PoseStamped. Example continuous publishers:
-        #
-        #   ros2 topic pub /needle/state/skin_entry geometry_msgs/msg/Point "{x: 0.0, y: 0.0, z: 0.0}"
-        #   ros2 topic pub /stage/state/needle_pose geometry_msgs/msg/PoseStamped "{header: {frame_id: needle}, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
-        #
-        # Using `--once` is fine for single-shot updates, but for robust operation
-        # it is often better to continuously publish both inputs.
         ####End Change
 
     # __init__
@@ -209,22 +195,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
 
     # insertion_depth setter
 
-    def __transform( self, pmat: np.ndarray, Rmat: np.ndarray ):
-        """ Transforms the needle pose of an N-D array using the current needle pose
-
-            :param pmat: numpy array of N x 3 size.
-            :param Rmat: numpy array of orientations of size N x 3 x 3
-
-            :returns: pmat transformed by current needle pose, Rmat transformed by current needle pose
-
-        """
-
-        current_p, current_R = self.current_needle_pose
-
-        return transform_shape( pmat, Rmat, current_p, current_R )
-
-    # __transform
-
     def get_needleshape( self ):
         """ Get the current needle shape"""
         # TODO: incorporate rotation while inserted into tissue
@@ -237,7 +207,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             R_init = self._R_init.copy()
 
         if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
-            pmat, Rmat = self.ss_needle.get_needle_shape()
+            pmat, Rmat = self.ss_needle.get_needle_shape(R_init)
         else:
             self.get_logger().error(
                 f"Shape type {self.ss_needle.current_shapetype} is not supported. "
@@ -301,8 +271,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
                 axis=0,
             )
 
-        pmat, Rmat = self.__transform(pmat, Rmat)
-
         return pmat, Rmat
 
     # get_needleshape
@@ -323,9 +291,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
             if self._cached_pmat is not None and self._cached_Rmat is not None:
                 header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
                 msg_shape = utilities.poses2msg( self._cached_pmat, self._cached_Rmat, header=header )
-                msg_depth = Float64( data=float( self.insertion_depth ) )
                 self.pub_shape.publish( msg_shape )
-                self.pub_depth.publish( msg_depth )
             return
 
         ####Change
@@ -371,8 +337,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         header    = Header( stamp=self.get_clock().now().to_msg(), frame_id='needle' )
         msg_shape = utilities.poses2msg( pmat, Rmat, header=header )
 
-        msg_depth = Float64(data=float(self.insertion_depth))
-
         self.get_logger().debug( f"Needle Shapes: {pmat.shape}, {Rmat.shape}, {len( msg_shape.poses )}" )
 
         # publish the messages
@@ -383,8 +347,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.pub_shape.publish( msg_shape )
         ####Change
         self.get_logger().debug(f"Shape poses: {[ (p.position.x, p.position.y, p.position.z) for p in msg_shape.poses ]}")
-        ####End Change
-        self.pub_depth.publish( msg_depth )
 
     # publish_shape
 
