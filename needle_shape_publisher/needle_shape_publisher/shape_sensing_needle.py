@@ -212,7 +212,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         with self._R_init_lock:
             R_init = self._R_init.copy()
 
-        if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.PIECEWISE_EXP) == NEEDLESHAPETYPE.PIECEWISE_EXP:
+        if (self.ss_needle.current_shapetype & NEEDLESHAPETYPE.LIM_SO3) == NEEDLESHAPETYPE.LIM_SO3:
             pmat, Rmat = self.ss_needle.get_needle_shape(R_init=R_init)
         else:
             self.get_logger().error(
