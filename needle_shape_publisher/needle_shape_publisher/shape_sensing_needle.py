@@ -120,11 +120,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.add_on_set_parameters_callback(self._on_set_parameters) 
 
         # configure shape-sensing needle
-        self.ss_needle._update_orientation_needle_airgap       = self.declare_parameter(
-            self.PARAM_UPDATE_ORNT_AIR,
-            value=True,
-            descriptor=ParameterDescriptor(type=Parameter.Type.BOOL.value),
-        ).get_parameter_value().bool_value
 
         self.ss_needle.current_depth      = 0
         self._depth_lock = threading.Lock()
