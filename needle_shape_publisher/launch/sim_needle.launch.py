@@ -19,24 +19,23 @@ pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher
 
 
 # Determine numChs and numAAs from needleParamFile
-def determineCHsAAs(needleParamFile: str):
+def determineAAs(needleParamFile: str):
     """Determine the number of channels and active areas available."""
     with open(needleParamFile, 'r') as paramFile:
         params = json.load(paramFile)
-    numChs = params['# channels']
     numAAs = params['# active areas']
-    return numChs, numAAs
+    return numAAs
 
 
 def generate_launch_description():
     ld = LaunchDescription()
 
     # Set numChs and numAAs
-    numCHs, numAAs = 3, 4
+    numAAs = 4
     for arg in sys.argv:
         if arg.startswith('needleParamFile:='):
             needleParamFile = arg.split(':=')[1]
-            numCHs, numAAs = determineCHsAAs(needleParamFile)
+            numAAs = determineAAs(needleParamFile)
 
     # Arguments
     # There will only be simulated readings in this branch.
