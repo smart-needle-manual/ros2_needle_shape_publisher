@@ -9,7 +9,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 pkg_needle_shape_publisher = get_package_share_directory('needle_shape_publisher')
 
-def determineCHsAAs(needleParamFile: str):
+def determineAAs(needleParamFile: str):
     """ Determine the number of channels and active areas available """
     with open(needleParamFile, 'r') as paramFile:
         params = json.load(paramFile) 
@@ -25,7 +25,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     # determine #chs and numAAs
-    numCHs, numAAs = None
+    numAAs = None
     # TO-DO: Default needs correction based on number and placement of active areas.
     default_needleparam_file = "3CH-4AA-0005_needle_params_2022-01-26_Jig-Calibration_best_weights.json"
     for arg in sys.argv:
@@ -38,7 +38,7 @@ def generate_launch_description():
     if numAAs is None: # just in-case using default value
         needleParamFile = default_needleparam_file
 
-    # numCHs, numAAs = determineCHsAAs(os.path.join(pkg_needle_shape_publisher, "needle_data", needleParamFile))
+    # numAAs = determineAAs(os.path.join(pkg_needle_shape_publisher, "needle_data", needleParamFile))
 
     # arguments
     arg_params = DeclareLaunchArgument( 'needleParamFile',
