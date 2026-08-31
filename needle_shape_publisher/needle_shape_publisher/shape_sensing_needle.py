@@ -113,6 +113,7 @@ class ShapeSensingNeedleNode( NeedleNode ):
         ).get_parameter_value().bool_value
 
         self.ss_needle.current_depth      = 0
+        self._depth_lock = threading.Lock()
         self.air_gap                      = 0  # the length of the gap in the air from the tissue
         self.ss_needle.current_curvatures = np.zeros( (2, self.ss_needle.num_activeAreas), dtype=float )
 
@@ -138,6 +139,14 @@ class ShapeSensingNeedleNode( NeedleNode ):
             Float64MultiArray,
             'state/R_init',
             self.sub_R_init_callback,
+            10,
+            callback_group=self._sub_cbg,
+        )
+
+        self.sub_insertion_depth = self.create_subscription(
+            Float64,
+            'state/insertion_depth',
+            self.sub_insertion_depth_callback,
             10,
             callback_group=self._sub_cbg,
         )
@@ -407,6 +416,10 @@ class ShapeSensingNeedleNode( NeedleNode ):
         with self._R_init_lock:
             self._R_init = np.array(msg.data, dtype=float).reshape(3, 3)
             self._mark_received('R_init')
+    def sub_insertion_depth_callback(self, msg: Float64):
+        with self._depth_lock:
+            self.insertion_depth = msg.data
+        self._mark_received('insertion_depth')
 
     def srv_needleshape_query_callback(self, req: GetPoseArray.Request, res: GetPoseArray.Response):
         """ Query the current needle shape """
