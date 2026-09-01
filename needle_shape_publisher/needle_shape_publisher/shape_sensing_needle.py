@@ -366,9 +366,6 @@ class ShapeSensingNeedleNode( NeedleNode ):
         self.get_logger().debug(f"Curvatures X: {self.ss_needle.current_curvatures[0]}")
         self.get_logger().debug(f"Curvatures Y: {self.ss_needle.current_curvatures[1]}")
 
-        if not self.ss_needle.is_calibrated:
-            self.ss_needle.ref_wavelengths = np.ones_like( self.ss_needle.ref_wavelengths )
-
         # if
 
     # sub_curvatures_callback
