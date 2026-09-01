@@ -2,4 +2,4 @@ repositories:
   needle_shape_sensing:
     type: git
     url: https://github.com/rban01/needle_shape_sensing_original.git
-    version: piecewise_exp
+    version: LIM_only
